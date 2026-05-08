@@ -4,7 +4,9 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import axios from "axios";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { signUp } from "@/lib/api";
+import { markManualShouldFadeInOnHome } from "@/lib/manual-home-fade";
 import { SignupSuccessCheck } from "@/components/signup-success-check";
 
 /* ── Design tokens (matches login page exactly) ── */
@@ -19,6 +21,9 @@ const C = {
   muted:  "#8a7a60",
   green:  "#2d6a3a",
 };
+
+/** Book card entrance / exit (X button fades out then navigates). */
+const AUTH_CARD_MS = 520;
 
 type AuthStep = "email" | "password";
 
@@ -128,6 +133,7 @@ const PW_RULES = [
 ] as const;
 
 export default function SignUpPage() {
+  const router = useRouter();
   const [step,                  setStep]                  = useState<AuthStep>("email");
   const [email,                 setEmail]                 = useState("");
   const [username,              setUsername]              = useState("");
@@ -139,10 +145,26 @@ export default function SignUpPage() {
   const [passwordBlinkTick,     setPasswordBlinkTick]     = useState(0);
   const [focusedField,          setFocusedField]          = useState<string | null>(null);
   const [mounted,               setMounted]               = useState(false);
+  const [exiting,               setExiting]               = useState(false);
 
   const passwordInputRef = useRef<HTMLInputElement>(null);
+  const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
+  useEffect(() => () => {
+    if (exitTimerRef.current) window.clearTimeout(exitTimerRef.current);
+  }, []);
+
+  const cardVisible = mounted && !exiting;
+  const closeToHome = () => {
+    if (exiting) return;
+    markManualShouldFadeInOnHome();
+    setExiting(true);
+    exitTimerRef.current = window.setTimeout(() => {
+      exitTimerRef.current = null;
+      router.replace("/");
+    }, AUTH_CARD_MS);
+  };
 
   const handleSignupCheckComplete = useCallback(() => {
     setSuccessRevealPhase("details");
@@ -241,9 +263,10 @@ export default function SignUpPage() {
         borderRadius: 6,
         overflow: "hidden",
         boxShadow: "0 24px 64px rgba(0,0,0,0.14), 0 4px 16px rgba(0,0,0,0.08)",
-        opacity:   mounted ? 1 : 0,
-        transform: mounted ? "translateY(0)" : "translateY(28px)",
-        transition: "opacity 520ms ease-out, transform 520ms ease-out",
+        opacity:   cardVisible ? 1 : 0,
+        transform: cardVisible ? "translateY(0)" : "translateY(28px)",
+        transition: `opacity ${AUTH_CARD_MS}ms ease-out, transform ${AUTH_CARD_MS}ms ease-out`,
+        pointerEvents: exiting ? "none" : "auto",
         flexDirection: "row",
       }}>
 
@@ -338,24 +361,27 @@ export default function SignUpPage() {
           borderRadius: "0 6px 6px 0",
           overflow: "hidden",
         }}>
-          {/* Close button */}
-          <Link
-            href="/"
+          {/* Close button — fades card out then navigates home */}
+          <button
+            type="button"
+            onClick={closeToHome}
             aria-label="Return home"
+            disabled={exiting}
             style={{
               position: "absolute", top: 16, right: 16,
               display: "flex", alignItems: "center", justifyContent: "center",
               width: 32, height: 32, borderRadius: "50%",
-              color: C.muted, textDecoration: "none",
+              color: C.muted, background: "transparent", border: "none", cursor: exiting ? "default" : "pointer",
               transition: "background 150ms",
+              opacity: exiting ? 0.5 : 1,
             }}
-            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.background = "rgba(0,0,0,0.06)"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.background = "transparent"; }}
+            onMouseEnter={e => { if (!exiting) (e.currentTarget as HTMLButtonElement).style.background = "rgba(0,0,0,0.06)"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
           >
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
               <path d="M18 6L6 18M6 6l12 12" />
             </svg>
-          </Link>
+          </button>
 
           {/* Success state */}
           {registrationSucceeded ? (

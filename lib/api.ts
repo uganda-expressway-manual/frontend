@@ -570,27 +570,73 @@ export async function deleteHighlight(highlightId: string): Promise<void> {
 }
 
 /* ------------------------------------------------------------------ */
-/* Notes                                                              */
+/* Files — rename, order                                              */
 /* ------------------------------------------------------------------ */
 
+export async function patchFileFilename(fileId: string, filename: string): Promise<void> {
+  await api.patch(`/files/${encodeURIComponent(fileId)}`, { filename });
+}
+
+export async function patchFileOrder(folderId: string, fileIds: string[]): Promise<void> {
+  await api.patch(`/files/order/${encodeURIComponent(folderId)}`, { fileIds });
+}
+
+/* ------------------------------------------------------------------ */
+/* Page notes — nested under `/files/:id/notes` (server `page` is 0-based) */
+/* ------------------------------------------------------------------ */
+
+/** Raw note from API (`page` is 0-based, same as extracted PDF text indices). */
+interface PageNoteApiRow {
+  id: string;
+  fileId: string;
+  page: number;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function mapPageNoteFromApi(row: PageNoteApiRow): NoteItem {
+  return {
+    ...row,
+    page: row.page + 1,
+  };
+}
+
 export async function getNotes(fileId: string): Promise<NoteItem[]> {
-  return (await api.get<NoteItem[]>("/notes", { params: { fileId } })).data;
+  const { data } = await api.get<PageNoteApiRow[]>(`/files/${encodeURIComponent(fileId)}/notes`);
+  return data.map(mapPageNoteFromApi);
 }
 
 export interface CreateNotePayload {
   fileId: string;
+  /** 1-based PDF page (converted to 0-based for the API). */
   page: number;
   body: string;
 }
 
 export async function createNote(payload: CreateNotePayload): Promise<NoteItem> {
-  return (await api.post<NoteItem>("/notes", payload)).data;
+  const { data } = await api.post<PageNoteApiRow>(
+    `/files/${encodeURIComponent(payload.fileId)}/notes`,
+    { page: payload.page - 1, body: payload.body }
+  );
+  return mapPageNoteFromApi(data);
 }
 
-export async function updateNote(noteId: string, body: string): Promise<NoteItem> {
-  return (await api.patch<NoteItem>(`/notes/${encodeURIComponent(noteId)}`, { body })).data;
+export async function updateNote(
+  fileId: string,
+  noteId: string,
+  input: { body?: string; /** 1-based */ page?: number }
+): Promise<NoteItem> {
+  const patchBody: { body?: string; page?: number } = {};
+  if (input.body !== undefined) patchBody.body = input.body;
+  if (input.page !== undefined) patchBody.page = input.page - 1;
+  const { data } = await api.patch<PageNoteApiRow>(
+    `/files/${encodeURIComponent(fileId)}/notes/${encodeURIComponent(noteId)}`,
+    patchBody
+  );
+  return mapPageNoteFromApi(data);
 }
 
-export async function deleteNote(noteId: string): Promise<void> {
-  await api.delete(`/notes/${encodeURIComponent(noteId)}`);
+export async function deleteNote(fileId: string, noteId: string): Promise<void> {
+  await api.delete(`/files/${encodeURIComponent(fileId)}/notes/${encodeURIComponent(noteId)}`);
 }

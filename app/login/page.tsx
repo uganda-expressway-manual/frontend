@@ -1,12 +1,13 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import Link from "next/link";
 import { getBackendErrorMessage } from "@/lib/api-errors";
 import { checkEmailForLogin, signIn } from "@/lib/api";
 import { SignInBlockedByAccountStatusError } from "@/lib/sign-in-errors";
+import { markManualShouldFadeInOnHome } from "@/lib/manual-home-fade";
 
 /* ── Design tokens ── */
 const fontSerif = "'Playfair Display', Georgia, serif";
@@ -22,6 +23,8 @@ const C = {
 
 const AUTH_CHECK_EMAIL_DISABLED = process.env.NEXT_PUBLIC_AUTH_CHECK_EMAIL_DISABLED === "true";
 const LOGIN_CREDENTIALS_ERROR   = "Incorrect email or password.";
+/** Entrance / exit duration for the book card (exit is the reverse motion). */
+const AUTH_CARD_MS = 500;
 
 type EmailContinueAlert = null | { message: string; detail?: string; showSignupLink: boolean };
 type AuthStep = "email" | "password";
@@ -42,9 +45,25 @@ export default function LoginPage() {
   const [isPasswordHidden,  setIsPasswordHidden]  = useState(true);
   const [emailAlert,        setEmailAlert]        = useState<EmailContinueAlert>(null);
   const [mounted,           setMounted]           = useState(false);
+  const [exiting,           setExiting]           = useState(false);
   const [focusedField,      setFocusedField]      = useState<string | null>(null);
+  const exitTimerRef       = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
+  useEffect(() => () => {
+    if (exitTimerRef.current) window.clearTimeout(exitTimerRef.current);
+  }, []);
+
+  const cardVisible = mounted && !exiting;
+  const closeToHome = () => {
+    if (exiting) return;
+    markManualShouldFadeInOnHome();
+    setExiting(true);
+    exitTimerRef.current = window.setTimeout(() => {
+      exitTimerRef.current = null;
+      router.replace("/");
+    }, AUTH_CARD_MS);
+  };
 
   const checkEmailMutation = useMutation({
     mutationFn: (addr: string) => checkEmailForLogin(addr),
@@ -103,9 +122,10 @@ export default function LoginPage() {
         borderRadius: 6,
         overflow: "hidden",
         boxShadow: "0 20px 60px rgba(0,0,0,0.16), 0 4px 16px rgba(0,0,0,0.08)",
-        opacity:    mounted ? 1 : 0,
-        transform:  mounted ? "translateY(0)" : "translateY(24px)",
-        transition: "opacity 500ms ease-out, transform 500ms ease-out",
+        opacity:    cardVisible ? 1 : 0,
+        transform:  cardVisible ? "translateY(0)" : "translateY(24px)",
+        transition: `opacity ${AUTH_CARD_MS}ms ease-out, transform ${AUTH_CARD_MS}ms ease-out`,
+        pointerEvents: exiting ? "none" : "auto",
         /* Stack on mobile */
         flexDirection: "row",
       }}>
@@ -188,24 +208,27 @@ export default function LoginPage() {
           display: "flex", flexDirection: "column", justifyContent: "center",
           position: "relative",
         }}>
-          {/* Close button */}
-          <Link
-            href="/"
+          {/* Close button — fades card out then navigates home */}
+          <button
+            type="button"
+            onClick={closeToHome}
             aria-label="Return home"
+            disabled={exiting}
             style={{
               position: "absolute", top: 16, right: 16,
               display: "flex", alignItems: "center", justifyContent: "center",
               width: 32, height: 32, borderRadius: "50%",
-              color: C.muted, textDecoration: "none",
+              color: C.muted, background: "transparent", border: "none", cursor: exiting ? "default" : "pointer",
               transition: "background 150ms",
+              opacity: exiting ? 0.5 : 1,
             }}
-            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.background = "rgba(0,0,0,0.06)"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.background = "transparent"; }}
+            onMouseEnter={e => { if (!exiting) (e.currentTarget as HTMLButtonElement).style.background = "rgba(0,0,0,0.06)"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
           >
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
               <path d="M18 6L6 18M6 6l12 12" />
             </svg>
-          </Link>
+          </button>
 
           {/* Back arrow when on password step */}
           {step === "password" && (
@@ -300,10 +323,29 @@ export default function LoginPage() {
                     type="button"
                     onClick={() => setIsPasswordHidden(p => !p)}
                     aria-label={isPasswordHidden ? "Show password" : "Hide password"}
-                    style={{ background: "none", border: "none", cursor: "pointer",
-                      color: C.muted, padding: "0 2px", fontSize: 12, fontFamily: fontBody }}
+                    title={isPasswordHidden ? "Show password" : "Hide password"}
+                    style={{
+                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      background: "none", border: "none", cursor: "pointer",
+                      color: C.navy, padding: "4px", marginRight: -4,
+                      opacity: 0.55, transition: "opacity 150ms",
+                    }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.55"; }}
                   >
-                    {isPasswordHidden ? "Show" : "Hide"}
+                    {isPasswordHidden ? (
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                        <path d="M3 3l18 18" />
+                        <path d="M10.58 10.58a2 2 0 102.84 2.84" />
+                        <path d="M9.88 5.09A10.94 10.94 0 0112 5c5.05 0 9.27 3.11 10 7-.21 1.13-.73 2.2-1.5 3.11" />
+                        <path d="M6.61 6.61C4.62 7.9 3.26 9.82 3 12c.73 3.89 4.95 7 10 7 2.18 0 4.2-.58 5.9-1.59" />
+                      </svg>
+                    ) : (
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                        <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                    )}
                   </button>
                 }
               />
@@ -401,11 +443,15 @@ function UnderlineField({
           onBlur={onBlur}
           style={{
             flex: 1, background: "transparent",
-            border: "none", borderBottom: `1.5px solid ${focused ? C.gold : C.border}`,
+            border: "none",
+            borderBottom: `2px solid ${focused ? "rgba(26,39,68,0.72)" : C.border}`,
             padding: "6px 0 8px",
             fontFamily: fontBody, fontSize: 14, color: C.navy,
-            outline: "none", borderRadius: 0,
+            outline: "none",
+            boxShadow: "none",
+            borderRadius: 0,
             transition: "border-color 200ms",
+            WebkitTapHighlightColor: "transparent",
           }}
         />
         {suffix && (

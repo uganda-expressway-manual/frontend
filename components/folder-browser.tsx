@@ -29,6 +29,14 @@ const C = {
 const BOOKS_PER_SHELF = 5;
 const PAGE_CHUNK_SIZE = 5;
 
+/** Same idea as folder interior: dim spines that do not match the search string (folder name or any PDF filename). */
+function folderMatchesFileNameFilter(folder: Folder, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  if (folder.foldername.toLowerCase().includes(q)) return true;
+  return folder.files.some((f) => f.filename.toLowerCase().includes(q));
+}
+
 interface GlobalFindItem {
   id: string;
   filename: string;
@@ -313,6 +321,7 @@ export function FolderBrowser() {
           key={shelfIndex}
           folders={shelfFolders}
           shelfIndex={shelfIndex}
+          fileNameFilter={globalSearch}
           admin={admin}
           draggedFolderId={draggedFolderId}
           dragOverFolderId={dragOverFolderId}
@@ -523,6 +532,8 @@ type ShelfProps = {
   folders: Folder[];
   shelfIndex: number;
   globalStartIndex: number;
+  /** When non-empty, spines that do not match folder name or any file name are dimmed (see folder interior). */
+  fileNameFilter: string;
   admin: boolean;
   draggedFolderId: string | null;
   dragOverFolderId: string | null;
@@ -537,7 +548,7 @@ type ShelfProps = {
 };
 
 function Shelf({
-  folders, shelfIndex, globalStartIndex, admin,
+  folders, shelfIndex, globalStartIndex, fileNameFilter, admin,
   draggedFolderId, dragOverFolderId,
   onOpenLocked, onEditToggle,
   onDragStart, onDrag, onDragEnd, onDragOver, onDragLeave, onDrop,
@@ -578,6 +589,8 @@ function Shelf({
           const isDragged = draggedFolderId === folder.id;
           const isDragOver = dragOverFolderId === folder.id;
 
+          const fileFilterMatches = folderMatchesFileNameFilter(folder, fileNameFilter);
+
           const bookEl = (
             <BookSpine
               folder={folder}
@@ -588,6 +601,7 @@ function Shelf({
               isPulling={isPulling}
               isDragged={isDragged}
               isDragOver={isDragOver}
+              fileFilterMatches={fileFilterMatches}
               admin={admin}
               onHoverIn={() => setHoveredId(folder.id)}
               onHoverOut={() => setHoveredId(null)}
@@ -646,6 +660,8 @@ type BookSpineProps = {
   isPulling: boolean;
   isDragged: boolean;
   isDragOver: boolean;
+  /** False when the dashboard search box is non-empty and this folder/name does not match. */
+  fileFilterMatches: boolean;
   admin: boolean;
   onHoverIn: () => void;
   onHoverOut: () => void;
@@ -655,7 +671,7 @@ type BookSpineProps = {
 
 function BookSpine({
   folder, color, folderSealed, isLocked,
-  isHovered, isPulling, isDragged, isDragOver,
+  isHovered, isPulling, isDragged, isDragOver, fileFilterMatches,
   admin, onHoverIn, onHoverOut, onClick, onEditToggle,
 }: BookSpineProps) {
   /* Detect touch device to replace hover→tap scale */
@@ -679,7 +695,15 @@ function BookSpine({
 
   return (
     /* perspective per book so translateZ works */
-    <div style={{ perspective: 500, marginBottom: 2 }}>
+    <div
+      style={{
+        perspective: 500,
+        marginBottom: 2,
+        opacity: fileFilterMatches ? 1 : 0.22,
+        transform: fileFilterMatches ? "none" : "scale(0.96)",
+        transition: "opacity 250ms ease, transform 250ms ease",
+      }}
+    >
       <div
         style={{
           position: "relative",

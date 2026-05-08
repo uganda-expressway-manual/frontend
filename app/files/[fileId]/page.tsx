@@ -135,6 +135,8 @@ export default function FileViewerPage() {
   const [bookmarkTargetPage, setBookmarkTargetPage] = useState<number | null>(null);
   const [viewerPdfSrc, setViewerPdfSrc] = useState("");
   const [fullscreenSearchDraft, setFullscreenSearchDraft] = useState("");
+  /** Controlled draft for “go to page” (synced from `currentPage` when the viewer moves). */
+  const [pageJumpDraft, setPageJumpDraft] = useState(String(initialPage));
   const viewerSectionRef = useRef<HTMLElement | null>(null);
   const lastTapTimeRef = useRef(0);
   const hideFullscreenMenuTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -264,14 +266,15 @@ export default function FileViewerPage() {
   });
 
   const updateNoteMutation = useMutation({
-    mutationFn: async (input: { id: string; body: string }) => updateNote(input.id, input.body),
+    mutationFn: async (input: { id: string; body: string; page?: number }) =>
+      updateNote(fileId, input.id, { body: input.body, ...(input.page != null ? { page: input.page } : {}) }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["notes", fileId] });
     },
   });
 
   const deleteNoteMutation = useMutation({
-    mutationFn: async (id: string) => deleteNote(id),
+    mutationFn: async (id: string) => deleteNote(fileId, id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["notes", fileId] });
     },
@@ -280,6 +283,10 @@ export default function FileViewerPage() {
   useEffect(() => {
     setCurrentPage(initialPage);
   }, [initialPage]);
+
+  useEffect(() => {
+    setPageJumpDraft(String(currentPage));
+  }, [currentPage]);
 
   useEffect(() => {
     if (!bookmarksQuery.data) {
@@ -456,6 +463,20 @@ export default function FileViewerPage() {
         q.delete("keyword");
       }
       router.replace(`${pathname}?${q.toString()}`);
+    },
+    [pathname, router, searchParams]
+  );
+
+  const applyPageToUrl = useCallback(
+    (nextPage: number) => {
+      const q = new URLSearchParams(searchParams.toString());
+      if (nextPage <= 1) {
+        q.delete("page");
+      } else {
+        q.set("page", String(nextPage));
+      }
+      const qs = q.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname);
     },
     [pathname, router, searchParams]
   );
@@ -651,6 +672,21 @@ export default function FileViewerPage() {
     }, 3200);
   };
 
+  const submitPageJump = (fromFullscreen: boolean) => {
+    const raw = pageJumpDraft.trim();
+    if (!raw) return;
+    const n = Number.parseInt(raw, 10);
+    if (!Number.isFinite(n) || n < 1) return;
+    const upper = totalPages > 0 ? totalPages : n;
+    const clamped = Math.min(Math.max(1, n), upper);
+    setCurrentPage(clamped);
+    setPageJumpDraft(String(clamped));
+    applyPageToUrl(clamped);
+    if (fromFullscreen) {
+      revealFullscreenMenuTemporarily();
+    }
+  };
+
   const onFullscreenSurfaceDoubleActivate = () => {
     if (!isFullscreen) {
       return;
@@ -772,6 +808,33 @@ export default function FileViewerPage() {
                   <span className="rounded-full bg-slate-900 px-2 py-1 text-[11px] font-semibold text-white">
                     Page {currentPage} / {totalPages || "—"}
                   </span>
+                  <form
+                    className="flex items-center gap-0.5"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      submitPageJump(true);
+                    }}
+                  >
+                    <label htmlFor="fullscreen-pdf-page-jump" className="sr-only">
+                      Go to page number
+                    </label>
+                    <input
+                      id="fullscreen-pdf-page-jump"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      value={pageJumpDraft}
+                      onChange={(event) => setPageJumpDraft(event.target.value.replace(/\D/g, ""))}
+                      className="h-[26px] w-10 rounded-md border border-slate-300 bg-white px-1 text-center text-[11px] tabular-nums text-slate-900 outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200/80"
+                      aria-label="Page number to open"
+                    />
+                    <button
+                      type="submit"
+                      className="rounded-md bg-slate-900 px-[7px] py-1 text-[11px] font-semibold text-white hover:bg-slate-800"
+                    >
+                      Go
+                    </button>
+                  </form>
                   {keyword ? (
                     <div className="flex items-center gap-0.5 rounded-md border border-slate-300 bg-white p-0.5">
                       <button
@@ -895,6 +958,33 @@ export default function FileViewerPage() {
               <p className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">
                 Page {currentPage} / {totalPages || "—"}
               </p>
+              <form
+                className="flex items-center gap-1"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  submitPageJump(false);
+                }}
+              >
+                <label htmlFor="pdf-page-jump" className="sr-only">
+                  Go to page number
+                </label>
+                <input
+                  id="pdf-page-jump"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={pageJumpDraft}
+                  onChange={(event) => setPageJumpDraft(event.target.value.replace(/\D/g, ""))}
+                  className="h-7 w-11 rounded-md border border-slate-300 bg-white px-1 text-center text-xs tabular-nums text-slate-900 outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200/80"
+                  aria-label="Page number to open"
+                />
+                <button
+                  type="submit"
+                  className="rounded-md bg-slate-800 px-2 py-1 text-[11px] font-semibold text-white hover:bg-slate-700"
+                >
+                  Go
+                </button>
+              </form>
               {keyword && (
                 <p className="rounded-full border border-yellow-200 bg-yellow-50 px-3 py-1 text-xs text-slate-700">
                   Keyword highlight: <span className="font-semibold">{keyword}</span>
@@ -1187,7 +1277,13 @@ export default function FileViewerPage() {
                     key={note.id}
                     note={note}
                     onJumpToPage={() => setCurrentPage(note.page)}
-                    onUpdate={(body) => updateNoteMutation.mutate({ id: note.id, body })}
+                    onUpdate={(body, page) =>
+                      updateNoteMutation.mutate({
+                        id: note.id,
+                        body,
+                        ...(page != null ? { page } : {}),
+                      })
+                    }
                     onDelete={() => deleteNoteMutation.mutate(note.id)}
                   />
                 ))}
@@ -1429,18 +1525,20 @@ function NoteComposerDialog({
 interface NoteRowProps {
   note: NoteItem;
   onJumpToPage: () => void;
-  onUpdate: (body: string) => void;
+  onUpdate: (body: string, page?: number) => void;
   onDelete: () => void;
 }
 
 function NoteRow({ note, onJumpToPage, onUpdate, onDelete }: NoteRowProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(note.body);
+  const [pageDraft, setPageDraft] = useState(String(note.page));
   useEffect(() => {
     if (!editing) {
       setDraft(note.body);
+      setPageDraft(String(note.page));
     }
-  }, [editing, note.body]);
+  }, [editing, note.body, note.page]);
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-2 text-xs">
@@ -1458,7 +1556,15 @@ function NoteRow({ note, onJumpToPage, onUpdate, onDelete }: NoteRowProps) {
               <button
                 type="button"
                 onClick={() => {
-                  onUpdate(draft);
+                  const p = Number.parseInt(pageDraft, 10);
+                  const pageOk = Number.isFinite(p) && p >= 1 ? p : note.page;
+                  const bodyChanged = draft !== note.body;
+                  const pageChanged = pageOk !== note.page;
+                  if (!bodyChanged && !pageChanged) {
+                    setEditing(false);
+                    return;
+                  }
+                  onUpdate(draft, pageChanged ? pageOk : undefined);
                   setEditing(false);
                 }}
                 className="rounded-md bg-slate-900 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-slate-700"
@@ -1495,11 +1601,24 @@ function NoteRow({ note, onJumpToPage, onUpdate, onDelete }: NoteRowProps) {
         </div>
       </div>
       {editing ? (
-        <textarea
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          className="ui-input mt-2 min-h-[80px] resize-y text-xs"
-        />
+        <div className="mt-2 space-y-2">
+          <label className="flex items-center gap-2 text-[11px] text-slate-600">
+            <span className="shrink-0 font-medium">Page</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={pageDraft}
+              onChange={(event) => setPageDraft(event.target.value.replace(/\D/g, ""))}
+              className="ui-input w-14 px-2 py-1 text-xs tabular-nums"
+              aria-label="Note page number"
+            />
+          </label>
+          <textarea
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            className="ui-input min-h-[80px] resize-y text-xs"
+          />
+        </div>
       ) : (
         <p className="mt-1 whitespace-pre-wrap text-slate-700">{note.body}</p>
       )}

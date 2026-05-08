@@ -19,7 +19,7 @@ import axios from "axios";
 import { DocumentChatWidget } from "@/components/document-chat-widget";
 import { BookshelfView, ListView } from "@/components/folder-bookshelf";
 import { isAdminUser } from "@/lib/auth-user";
-import { api } from "@/lib/api";
+import { api, patchFileFilename, patchFileOrder } from "@/lib/api";
 import { useAuth } from "@/lib/hooks/use-auth";
 import { Folder, FolderFile } from "@/lib/types";
 
@@ -131,6 +131,27 @@ export default function FolderPage() {
     },
   });
 
+  const renameFileMutation = useMutation({
+    mutationFn: async ({ fileId, filename }: { fileId: string; filename: string }) =>
+      patchFileFilename(fileId, filename),
+    onSuccess: () => {
+      void folderQuery.refetch();
+    },
+    onError: () => {
+      void folderQuery.refetch();
+    },
+  });
+
+  const reorderFilesMutation = useMutation({
+    mutationFn: async (fileIds: string[]) => patchFileOrder(folderId, fileIds),
+    onSuccess: () => {
+      void folderQuery.refetch();
+    },
+    onError: () => {
+      void folderQuery.refetch();
+    },
+  });
+
   const folderSearchQuery = useQuery({
     queryKey: ["folder-search", folderId, debouncedFolderSearch],
     queryFn: async () =>
@@ -141,7 +162,8 @@ export default function FolderPage() {
   });
 
   const folder = folderQuery.data;
-  const fileOrderSignature = folder?.files.map((f) => f.id).join("|") ?? "";
+  const fileOrderSignature =
+    folder?.files.map((f) => `${f.id}:${f.sortOrder ?? ""}`).join("|") ?? "";
 
   const searchContextHref = (() => {
     const p = new URLSearchParams();
@@ -239,6 +261,7 @@ export default function FolderPage() {
   };
 
   const volumeLabel = visibleFiles.length === 1 ? "1 volume" : `${visibleFiles.length} volumes`;
+  const canPersistFileOrder = admin && !uploadBlockedForUser && !folderSearch.trim() && !fileSortField;
 
   // ── Main render ──
   return (
@@ -544,13 +567,29 @@ export default function FolderPage() {
               onDelete={(file) => setFilePendingDelete(file)}
             />
           ) : (
+            <>
             <ListView
               files={visibleFiles}
               searchQuery={folderSearch}
               isAdmin={admin}
               folderLocked={folderLocked}
               onDelete={(file) => setFilePendingDelete(file)}
+              allowReorder={canPersistFileOrder}
+              reorderSaving={reorderFilesMutation.isPending}
+              onReorder={(next) => {
+                setOrderedFiles(next);
+                reorderFilesMutation.mutate(next.map((f) => f.id));
+              }}
+              allowRename={admin && !uploadBlockedForUser}
+              renamePendingId={renameFileMutation.isPending ? renameFileMutation.variables?.fileId ?? null : null}
+              onRename={(fileId, filename) => renameFileMutation.mutate({ fileId, filename })}
             />
+            {(renameFileMutation.isError || reorderFilesMutation.isError) && (
+              <p style={{ fontFamily: fontSerif, fontSize: 12, color: "#c0392b", marginTop: 12 }}>
+                Could not save file name or order. Please try again.
+              </p>
+            )}
+            </>
           )}
 
         </div>

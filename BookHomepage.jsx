@@ -341,7 +341,6 @@ function BookCover({ onClick, tiltEnabled = true }) {
   const hoverTimer    = useRef(null);
   const [showHint, setShowHint]   = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-  const [isFocused, setIsFocused] = useState(false);
 
   const onMouseMove = useCallback((e) => {
     if (!tiltEnabled) return;
@@ -365,7 +364,7 @@ function BookCover({ onClick, tiltEnabled = true }) {
   return (
     /* Outer: perspective container + click target */
     <div
-      style={{ perspective: 2000, width: 'min(88vw,480px)', height: BOOK_PAGE_H, cursor: 'pointer', position: 'relative', userSelect: 'none' }}
+      style={{ perspective: 2000, width: 'min(88vw,480px)', height: BOOK_PAGE_H, cursor: 'pointer', position: 'relative', userSelect: 'none', WebkitUserSelect: 'none', outline: 'none', WebkitTapHighlightColor: 'transparent' }}
       onClick={onClick}
       onMouseMove={onMouseMove}
       onMouseEnter={() => {
@@ -378,8 +377,6 @@ function BookCover({ onClick, tiltEnabled = true }) {
       role="button"
       aria-label="Open the Expressway Integrated Manual"
       tabIndex={0}
-      onFocus={() => setIsFocused(true)}
-      onBlur={() => setIsFocused(false)}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
     >
       {/* Inner: the book itself — this element gets the tilt transform */}
@@ -393,15 +390,16 @@ function BookCover({ onClick, tiltEnabled = true }) {
             : '-6px 6px 20px rgba(0,0,0,0.38), 4px 0 8px rgba(0,0,0,0.14), 2px 0 0 #f0ebe0, 4px 0 0 #e8e2d8, 6px 0 0 #e0d9ce',
           overflow: 'hidden',
           transition: 'box-shadow 200ms ease',
-          outline: isFocused ? `2px solid ${C.gold}` : 'none',
-          outlineOffset: isFocused ? '4px' : '0px',
+          outline: 'none',
+          WebkitTapHighlightColor: 'transparent',
           position: 'relative',
         }}
       >
         <img
           src="/logo/bookcover.png"
           alt="Uganda Expressway Integrated Manual cover"
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }}
+          draggable={false}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', userSelect: 'none', WebkitUserSelect: 'none', pointerEvents: 'none' }}
         />
       </div>
 
@@ -968,13 +966,21 @@ export default function BookHomepage({ onLoginClick }) {
         href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Serif+4:ital,wght@0,300;0,400;1,300&display=swap"
       />
 
-      <main style={{
+      <main
+        data-imme-manual-book
+        style={{
         minHeight: '100dvh',
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
         padding: 0, background: '#f4f1ec',
         position: 'relative',
         overflowX: 'visible',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        MozUserSelect: 'none',
+        msUserSelect: 'none',
+        WebkitTouchCallout: 'none',
+        WebkitTapHighlightColor: 'transparent',
       }}>
         <h1 style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>
           Uganda Expressway Integrated Manual — interactive book preview

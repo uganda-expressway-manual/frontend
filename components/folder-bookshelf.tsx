@@ -9,7 +9,7 @@
  *   3. Placeholder cover (spine color + title text) shown while loading / on error
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import { pdfjs } from "react-pdf";
 import { getPdfViewerPresignedUrl } from "@/lib/api";
@@ -579,6 +579,16 @@ function SmallThumb({ file, folderLocked = true }: { file: FolderFile; folderLoc
   );
 }
 
+function reorderFileList(list: FolderFile[], fromId: string, toId: string): FolderFile[] {
+  const fromIdx = list.findIndex((f) => f.id === fromId);
+  const toIdx = list.findIndex((f) => f.id === toId);
+  if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return list;
+  const next = [...list];
+  const [removed] = next.splice(fromIdx, 1);
+  next.splice(toIdx, 0, removed);
+  return next;
+}
+
 // ─── ListView ──────────────────────────────────────────────────────────────────
 
 export function ListView({
@@ -587,19 +597,60 @@ export function ListView({
   isAdmin,
   folderLocked,
   onDelete,
+  allowReorder = false,
+  reorderSaving = false,
+  onReorder,
+  allowRename = false,
+  onRename,
+  renamePendingId = null,
 }: {
   files: FolderFile[];
   searchQuery: string;
   isAdmin: boolean;
   folderLocked: boolean;
   onDelete: (file: FolderFile) => void;
+  allowReorder?: boolean;
+  reorderSaving?: boolean;
+  onReorder?: (next: FolderFile[]) => void;
+  allowRename?: boolean;
+  onRename?: (fileId: string, filename: string) => void;
+  renamePendingId?: string | null;
 }) {
   const router = useRouter();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [draggingFileId, setDraggingFileId] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
 
   const filtered = files.filter(f =>
     !searchQuery.trim() || f.filename.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const commitRename = () => {
+    if (!renamingId || !onRename) return;
+    const trimmed = renameDraft.trim();
+    if (!trimmed || trimmed === files.find((f) => f.id === renamingId)?.filename) {
+      setRenamingId(null);
+      return;
+    }
+    onRename(renamingId, trimmed);
+    setRenamingId(null);
+  };
+
+  const onRowDragOver = (event: DragEvent<HTMLDivElement>) => {
+    if (!allowReorder || !onReorder) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+  };
+
+  const onRowDrop = (event: DragEvent<HTMLDivElement>, targetFile: FolderFile) => {
+    if (!allowReorder || !onReorder) return;
+    event.preventDefault();
+    const fromId = event.dataTransfer.getData("text/plain") || draggingFileId;
+    if (!fromId || fromId === targetFile.id) return;
+    onReorder(reorderFileList(files, fromId, targetFile.id));
+    setDraggingFileId(null);
+  };
 
   if (filtered.length === 0) {
     return (
@@ -610,54 +661,181 @@ export function ListView({
   }
 
   return (
-    <div style={{ border: `1px solid ${C.border}`, borderRadius: 6, overflow: "hidden" }}>
+    <div>
+      {allowReorder && (
+        <p style={{ fontFamily: fontSerif, fontSize: 12, color: C.muted, marginBottom: 10, lineHeight: 1.45 }}>
+          Drag the handle (☰) to reorder volumes. Order is saved for everyone.
+          {reorderSaving ? " Saving…" : ""}
+        </p>
+      )}
+      <div style={{ border: `1px solid ${C.border}`, borderRadius: 6, overflow: "hidden" }}>
       {filtered.map((file, idx) => (
         <div
           key={file.id}
           onMouseEnter={() => setHoveredId(file.id)}
           onMouseLeave={() => setHoveredId(null)}
+          onDragOver={onRowDragOver}
+          onDrop={(e) => onRowDrop(e, file)}
           style={{
-            display: "flex", alignItems: "center", gap: 16,
+            display: "flex", alignItems: "center", gap: 12,
             padding: "12px 16px",
             borderBottom: idx < filtered.length - 1 ? `1px solid ${C.border}` : "none",
             background: hoveredId === file.id ? "rgba(201,124,42,0.04)" : "#fff",
             transition: "background 150ms ease",
-            cursor: "pointer",
+            cursor: renamingId === file.id ? "default" : "pointer",
+            opacity: draggingFileId === file.id ? 0.45 : 1,
           }}
-          onClick={() => router.push(`/files/${file.id}`)}
+          onClick={() => {
+            if (renamingId === file.id) return;
+            router.push(`/files/${file.id}`);
+          }}
         >
+          {allowReorder && (
+            <div
+              draggable
+              role="button"
+              tabIndex={0}
+              aria-label={`Drag to reorder ${file.filename}`}
+              title="Drag to reorder"
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") e.preventDefault();
+              }}
+              onDragStart={(e) => {
+                e.stopPropagation();
+                setDraggingFileId(file.id);
+                e.dataTransfer.setData("text/plain", file.id);
+                e.dataTransfer.effectAllowed = "move";
+              }}
+              onDragEnd={() => setDraggingFileId(null)}
+              style={{
+                cursor: "grab",
+                color: C.muted,
+                fontSize: 14,
+                userSelect: "none",
+                padding: "4px 2px",
+                flexShrink: 0,
+              }}
+            >
+              ☰
+            </div>
+          )}
           <SmallThumb file={file} folderLocked={folderLocked && !isAdmin} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{
-              fontFamily: fontSerif, fontSize: 14, color: C.navy,
-              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-            }}>
-              {file.filename}
-            </p>
+            {renamingId === file.id ? (
+              <input
+                value={renameDraft}
+                onChange={(e) => setRenameDraft(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                autoFocus
+                className="ui-input"
+                style={{
+                  width: "100%",
+                  fontFamily: fontSerif,
+                  fontSize: 14,
+                  padding: "6px 8px",
+                  boxSizing: "border-box",
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commitRename();
+                  }
+                  if (e.key === "Escape") {
+                    setRenamingId(null);
+                  }
+                }}
+              />
+            ) : (
+              <p style={{
+                fontFamily: fontSerif, fontSize: 14, color: C.navy,
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>
+                {file.filename}
+              </p>
+            )}
             <p style={{ fontFamily: fontSerif, fontSize: 11, color: C.muted, marginTop: 2 }}>
               {formatDate(file.createdAt)}
             </p>
           </div>
           {isAdmin && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onDelete(file); }}
-              style={{
-                width: 24, height: 24, borderRadius: "50%",
-                background: hoveredId === file.id ? "rgba(0,0,0,0.08)" : "transparent",
-                border: "none", color: C.muted,
-                fontSize: 16, cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                transition: "background 150ms ease",
-                opacity: hoveredId === file.id ? 1 : 0,
-              }}
-              title="Delete file"
-            >
-              ×
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+              {allowRename && onRename && renamingId === file.id ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      commitRename();
+                    }}
+                    disabled={renamePendingId === file.id}
+                    style={{
+                      fontFamily: fontSerif, fontSize: 11, padding: "4px 10px",
+                      background: C.navy, color: "#fff", border: "none", borderRadius: 3, cursor: "pointer",
+                      opacity: renamePendingId === file.id ? 0.6 : 1,
+                    }}
+                  >
+                    {renamePendingId === file.id ? "…" : "Save"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setRenamingId(null);
+                    }}
+                    style={{
+                      fontFamily: fontSerif, fontSize: 11, padding: "4px 10px",
+                      background: "transparent", color: C.navy, border: `1px solid ${C.border}`, borderRadius: 3, cursor: "pointer",
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  {allowRename && onRename && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRenamingId(file.id);
+                        setRenameDraft(file.filename);
+                      }}
+                      style={{
+                        fontFamily: fontSerif, fontSize: 11, padding: "4px 8px",
+                        background: hoveredId === file.id ? "rgba(0,0,0,0.06)" : "transparent",
+                        border: `1px solid ${C.border}`, borderRadius: 3, color: C.navy, cursor: "pointer",
+                        opacity: hoveredId === file.id ? 1 : 0,
+                        transition: "opacity 150ms ease",
+                      }}
+                      title="Rename file"
+                    >
+                      Rename
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onDelete(file); }}
+                    style={{
+                      width: 24, height: 24, borderRadius: "50%",
+                      background: hoveredId === file.id ? "rgba(0,0,0,0.08)" : "transparent",
+                      border: "none", color: C.muted,
+                      fontSize: 16, cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      transition: "background 150ms ease",
+                      opacity: hoveredId === file.id ? 1 : 0,
+                    }}
+                    title="Delete file"
+                  >
+                    ×
+                  </button>
+                </>
+              )}
+            </div>
           )}
         </div>
       ))}
+      </div>
     </div>
   );
 }

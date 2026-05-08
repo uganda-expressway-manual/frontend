@@ -26,6 +26,8 @@ export interface FolderFile {
   id: string;
   filename: string;
   createdAt: string;
+  /** Server order within the folder (lower first). Omitted on older APIs. */
+  sortOrder?: number;
 }
 
 export interface Folder {
@@ -120,10 +122,11 @@ export interface HighlightItem {
   updatedAt: string;
 }
 
-/** Backend `Note` row — free-form note attached to a specific page of a file. */
+/** Backend `PageNote` row — free-form note on a PDF page. In API responses `page` is 0-based; `lib/api` maps to 1-based for the UI. */
 export interface NoteItem {
   id: string;
   fileId: string;
+  /** 1-based page index in the reader UI (API uses 0-based). */
   page: number;
   body: string;
   createdAt: string;

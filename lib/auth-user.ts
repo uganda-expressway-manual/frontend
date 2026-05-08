@@ -208,8 +208,17 @@ export function resolveAuthUserFromCredentialResponse(payload: unknown, fallback
 
   const r = payload as LooseUser;
 
+  const usernameFlatRawEarly = r.username ?? r.userName;
+  const usernameFlatEarly =
+    typeof usernameFlatRawEarly === "string" && usernameFlatRawEarly.trim().length > 0
+      ? usernameFlatRawEarly.trim()
+      : undefined;
+
   const nested = normalizeAuthUser(r.user ?? null);
   if (nested) {
+    if (usernameFlatEarly && !nested.username?.trim()) {
+      return { ...nested, username: usernameFlatEarly };
+    }
     return nested;
   }
 
@@ -223,11 +232,7 @@ export function resolveAuthUserFromCredentialResponse(payload: unknown, fallback
   const roleRaw = r.role ?? r.userRole;
   const statusFlat = parseUserStatus(r.status ?? r.userStatus ?? r.accountStatus);
 
-  const usernameFlatRaw = r.username ?? r.userName;
-  const usernameFlat =
-    typeof usernameFlatRaw === "string" && usernameFlatRaw.trim().length > 0
-      ? usernameFlatRaw.trim()
-      : undefined;
+  const usernameFlat = usernameFlatEarly;
 
   if (id && email) {
     return {
@@ -244,6 +249,7 @@ export function resolveAuthUserFromCredentialResponse(payload: unknown, fallback
     return {
       ...base,
       role: normalizeRole(roleRaw),
+      ...(usernameFlat ? { username: usernameFlat } : {}),
       ...(statusFlat ? { status: statusFlat } : {}),
     };
   }
@@ -257,9 +263,15 @@ export function resolveAuthUserFromCredentialResponse(payload: unknown, fallback
   if (token?.trim()) {
     const fromJwt = authUserFromAccessToken(token.trim(), emailFallback);
     if (fromJwt) {
-      return fromJwt;
+      return {
+        ...fromJwt,
+        ...(usernameFlat ? { username: usernameFlat } : {}),
+      };
     }
   }
 
-  return minimalAuthUserFromEmail(emailFallback);
+  return {
+    ...minimalAuthUserFromEmail(emailFallback),
+    ...(usernameFlat ? { username: usernameFlat } : {}),
+  };
 }
