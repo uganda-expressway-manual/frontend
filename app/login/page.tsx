@@ -47,7 +47,8 @@ export default function LoginPage() {
   const [mounted,           setMounted]           = useState(false);
   const [exiting,           setExiting]           = useState(false);
   const [focusedField,      setFocusedField]      = useState<string | null>(null);
-  const exitTimerRef       = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** DOM timer id — avoids `Timeout` vs `number` clash when `@types/node` merges globals. */
+  const exitTimerRef       = useRef<number | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
   useEffect(() => () => {
@@ -62,7 +63,7 @@ export default function LoginPage() {
     exitTimerRef.current = window.setTimeout(() => {
       exitTimerRef.current = null;
       router.replace("/");
-    }, AUTH_CARD_MS);
+    }, AUTH_CARD_MS) as unknown as number;
   };
 
   const checkEmailMutation = useMutation({
