@@ -559,13 +559,26 @@ export default function FolderPage() {
 
           {/* ─────────────── Change 3 — Bookshelf / List view ─────────────── */}
           {viewMode === "bookshelf" ? (
+            <>
             <BookshelfView
               files={visibleFiles}
               isAdmin={admin}
               folderLocked={folderLocked}
               searchQuery={folderSearch}
               onDelete={(file) => setFilePendingDelete(file)}
+              allowReorder={canPersistFileOrder}
+              reorderSaving={reorderFilesMutation.isPending}
+              onReorder={(next) => {
+                setOrderedFiles(next);
+                reorderFilesMutation.mutate(next.map((f) => f.id));
+              }}
             />
+            {(renameFileMutation.isError || reorderFilesMutation.isError) && (
+              <p style={{ fontFamily: fontSerif, fontSize: 12, color: "#c0392b", marginTop: 12 }}>
+                Could not save file name or order. Please try again.
+              </p>
+            )}
+            </>
           ) : (
             <>
             <ListView

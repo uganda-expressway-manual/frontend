@@ -116,9 +116,20 @@ const CLOSE_MS  = 780;
 const CLOSE_HOME_MS = 780;
 const FLIP_MS = 880; // in-book page turns (desktop 3‑D overlay + mobile slide)
 
-/** Same page height as closed cover; spread width ≈ two cover halves + spine (no growth to a separate “wide” aspect) */
-const BOOK_PAGE_H   = 'min(86vh, 680px)';
-const BOOK_SPREAD_W = 'min(96vw, 962px)';
+/**
+ * Design reference: spread 962×680, cover spine+face portrait 480×680 (same page height).
+ * Fills viewport as much as possible while preserving ratio; subtracts ~header + gutters.
+ */
+const BOOK_LAYOUT_VARS = {
+  '--book-page-h':
+    'min(calc(100dvh - 96px), calc((100vw - 24px) * 680 / 962))',
+  '--book-spread-w':
+    'min(calc(100vw - 24px), calc((100dvh - 96px) * 962 / 680))',
+  '--book-cover-w': 'calc(var(--book-page-h) * 480 / 680)',
+};
+
+const BOOK_PAGE_H = 'var(--book-page-h)';
+const BOOK_SPREAD_W = 'var(--book-spread-w)';
 
 // ─── Content components ───────────────────────────────────────────────────────
 
@@ -364,7 +375,7 @@ function BookCover({ onClick, tiltEnabled = true }) {
   return (
     /* Outer: perspective container + click target */
     <div
-      style={{ perspective: 2000, width: 'min(88vw,480px)', height: BOOK_PAGE_H, cursor: 'pointer', position: 'relative', userSelect: 'none', WebkitUserSelect: 'none', outline: 'none', WebkitTapHighlightColor: 'transparent' }}
+      style={{ perspective: 2000, width: 'var(--book-cover-w)', height: BOOK_PAGE_H, cursor: 'pointer', position: 'relative', userSelect: 'none', WebkitUserSelect: 'none', outline: 'none', WebkitTapHighlightColor: 'transparent' }}
       onClick={onClick}
       onMouseMove={onMouseMove}
       onMouseEnter={() => {
@@ -519,7 +530,7 @@ function BookOpeningAnimation({ onDone }) {
 
       <div style={{
         position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', zIndex: 12,
-        width: 'min(88vw, 480px)', height: BOOK_PAGE_H,
+        width: 'var(--book-cover-w)', height: BOOK_PAGE_H,
         borderRadius: '2px 10px 10px 2px',
         opacity: 1,
         overflow: 'hidden',
@@ -556,7 +567,7 @@ function BookClosingAnimation({ spread, onDone, onLoginClick }) {
 
       <div style={{
         position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
-        zIndex: 25, width: 'min(88vw, 480px)', height: BOOK_PAGE_H,
+        zIndex: 25, width: 'var(--book-cover-w)', height: BOOK_PAGE_H,
         borderRadius: '2px 10px 10px 2px', overflow: 'hidden',
         boxShadow: '-6px 12px 32px rgba(0,0,0,0.40)',
         opacity: 0,
@@ -589,7 +600,7 @@ function BookClosingSpreadZero({ onDone }) {
 
       <div style={{
         position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
-        zIndex: 25, width: 'min(88vw, 480px)', height: BOOK_PAGE_H,
+        zIndex: 25, width: 'var(--book-cover-w)', height: BOOK_PAGE_H,
         borderRadius: '2px 10px 10px 2px', overflow: 'hidden',
         boxShadow: '-6px 12px 32px rgba(0,0,0,0.40)',
         opacity: 0,
@@ -610,7 +621,7 @@ function AnimatingCover({ mode, onDone }) {
     return () => window.clearTimeout(t);
   }, [mode, onDone]);
   return (
-    <div style={{ width: 'min(88vw,480px)', height: BOOK_PAGE_H, flexShrink: 0 }}>
+    <div style={{ width: 'var(--book-cover-w)', height: BOOK_PAGE_H, flexShrink: 0 }}>
       <div style={{
         width: '100%', height: '100%',
         borderRadius: '2px 10px 10px 2px',
@@ -699,7 +710,7 @@ function MobileFlipOverlay({ direction, fromPageIndex, onLoginClick }) {
       animation: `${isForward ? 'mobileFlipFwd' : 'mobileFlipBwd'} ${FLIP_MS}ms cubic-bezier(0.4, 0, 0.3, 1) forwards`,
     }}>
       <div style={styles.pageTexture} />
-      <div style={{ ...styles.pageInner, flex: 1, minHeight: 'min(74vh,680px)' }}>
+      <div style={{ ...styles.pageInner, flex: 1, minHeight: 0 }}>
         {getMobilePage(fromPageIndex, onLoginClick)}
       </div>
     </div>
@@ -734,14 +745,18 @@ function OpenBook({
   if (isMobile) {
     return (
       <div style={{
-        width: 'min(92vw,560px)', minHeight: 'min(84vh,700px)',
+        width: 'min(var(--book-spread-w), calc(100vw - 24px))',
+        minHeight: BOOK_PAGE_H,
+        maxHeight: BOOK_PAGE_H,
+        display: 'flex',
+        flexDirection: 'column',
         borderRadius: 10, overflow: 'hidden',
         border: `1px solid ${C.paperBorder}`, background: C.paper,
         boxShadow: '0 8px 32px rgba(0,0,0,0.16)',
         position: 'relative',
       }}>
         <div style={styles.pageTexture} />
-        <div style={{ ...styles.pageInner, minHeight: 'min(74vh,640px)', pointerEvents: 'none' }}>
+        <div style={{ ...styles.pageInner, minHeight: 0, flex: 1, pointerEvents: 'none' }}>
           {getMobilePage(mobilePageIndex, onLoginClick)}
         </div>
 
@@ -969,7 +984,10 @@ export default function BookHomepage({ onLoginClick }) {
       <main
         data-imme-manual-book
         style={{
-        minHeight: '100dvh',
+        ...BOOK_LAYOUT_VARS,
+        flex: '1 1 auto',
+        minHeight: 'calc(100dvh - 72px)',
+        width: '100%',
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
         padding: 0, background: '#f4f1ec',
@@ -990,9 +1008,10 @@ export default function BookHomepage({ onLoginClick }) {
           data-animating={isAnimating ? 'true' : undefined}
           style={{
             width: '100%',
+            flex: '1 1 auto',
+            minHeight: 0,
             display: 'flex', justifyContent: 'center', alignItems: 'center',
-            padding: 'clamp(12px, 2.5vh, 48px) clamp(12px, 5vw, 80px)',
-            minHeight: 'min(94vh, 880px)',
+            padding: 'clamp(8px, 1.5vh, 14px) clamp(10px, 2vw, 16px)',
             boxSizing: 'border-box',
             /* Room for spread corners — avoid clipping during open/close */
             overflow: 'visible',

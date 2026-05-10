@@ -122,7 +122,7 @@ export interface HighlightItem {
   updatedAt: string;
 }
 
-/** Backend `PageNote` row — free-form note on a PDF page. In API responses `page` is 0-based; `lib/api` maps to 1-based for the UI. */
+/** Backend `PageNote` row. Wire JSON uses 0-based `page`; `lib/api` maps to 1-based `NoteItem.page` for the viewer. PATCH update returns 204 (no body) — refetch notes after updates. */
 export interface NoteItem {
   id: string;
   fileId: string;

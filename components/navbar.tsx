@@ -78,7 +78,7 @@ export function Navbar() {
           </span>
         </Link>
 
-        {/* ── Right: dashboard + avatar menu + logout ── */}
+        {/* ── Right: dashboard + avatar menu ── */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
 
           <Link
@@ -172,7 +172,7 @@ export function Navbar() {
                   </DropdownLink>
                 )}
 
-                {/* Logout inside dropdown (duplicates button for discoverability) */}
+                {/* Logout */}
                 <button
                   type="button"
                   onClick={() => { setDropdownOpen(false); logoutMutation.mutate(); }}
@@ -190,19 +190,11 @@ export function Navbar() {
               </div>
             )}
           </div>
-
-          {/* Logout button */}
-          <LogoutButton
-            pending={logoutMutation.isPending}
-            onClick={() => logoutMutation.mutate()}
-          />
         </div>
       </div>
     </header>
   );
 }
-
-/* ── Small helpers ── */
 
 function DropdownLink({
   href, onClick, children,
@@ -224,30 +216,5 @@ function DropdownLink({
     >
       {children}
     </Link>
-  );
-}
-
-function LogoutButton({ pending, onClick }: { pending: boolean; onClick: () => void }) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={pending}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        fontFamily: "'Source Serif 4', Georgia, serif",
-        fontSize: 13, letterSpacing: "0.02em",
-        color:       hovered ? "white" : "#1a2744",
-        background:  hovered ? "#c97c2a" : "transparent",
-        border: `1px solid ${hovered ? "#c97c2a" : "#1a2744"}`,
-        borderRadius: 4, padding: "6px 14px",
-        cursor: "pointer", transition: "all 200ms",
-        opacity: pending ? 0.6 : 1,
-      }}
-    >
-      {pending ? "Logging out…" : "Logout"}
-    </button>
   );
 }

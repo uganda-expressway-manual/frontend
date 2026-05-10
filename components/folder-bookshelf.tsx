@@ -110,6 +110,14 @@ function Book3D({
   searchQuery,
   onDelete,
   adjacentShift = 0,
+  allowReorder = false,
+  isReorderDragged = false,
+  isReorderDropTarget = false,
+  onReorderDragStart,
+  onReorderDragEnd,
+  onReorderDragOver,
+  onReorderDragLeave,
+  onReorderDrop,
 }: {
   file: FolderFile;
   isAdmin: boolean;
@@ -117,6 +125,14 @@ function Book3D({
   searchQuery: string;
   onDelete: (file: FolderFile) => void;
   adjacentShift?: number;
+  allowReorder?: boolean;
+  isReorderDragged?: boolean;
+  isReorderDropTarget?: boolean;
+  onReorderDragStart?: (e: DragEvent<HTMLDivElement>) => void;
+  onReorderDragEnd?: (e: DragEvent<HTMLDivElement>) => void;
+  onReorderDragOver?: (e: DragEvent<HTMLDivElement>) => void;
+  onReorderDragLeave?: (e: DragEvent<HTMLDivElement>) => void;
+  onReorderDrop?: (e: DragEvent<HTMLDivElement>) => void;
 }) {
   const router    = useRouter();
   const bookRef   = useRef<HTMLDivElement>(null);
@@ -191,11 +207,17 @@ function Book3D({
 
   return (
     <div
+      onDragOver={allowReorder ? onReorderDragOver : undefined}
+      onDrop={allowReorder ? onReorderDrop : undefined}
+      onDragLeave={allowReorder ? onReorderDragLeave : undefined}
       style={{
         position: "relative",
         opacity:   matches ? 1 : 0.2,
         transform: `translateY(${jitter}px)${adjacentShift ? ` translateX(${adjacentShift}px)` : ""}${!matches ? " scale(0.95)" : ""}`,
         transition: "opacity 250ms ease, transform 250ms ease",
+        outline: isReorderDropTarget ? `2px dashed ${C.gold}` : "none",
+        outlineOffset: isReorderDropTarget ? 6 : 0,
+        borderRadius: isReorderDropTarget ? 8 : undefined,
       }}
     >
       {/* ── Tooltip ── */}
@@ -236,24 +258,28 @@ function Book3D({
       {/* ── 3D Book ── */}
       <div
         ref={bookRef}
+        draggable={allowReorder}
+        onDragStart={allowReorder ? onReorderDragStart : undefined}
+        onDragEnd={allowReorder ? onReorderDragEnd : undefined}
         onClick={handleClick}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         role="button"
         tabIndex={0}
-        aria-label={`Open ${file.filename}`}
+        aria-label={allowReorder ? `Open or drag to reorder: ${file.filename}` : `Open ${file.filename}`}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleClick(); } }}
+        title={allowReorder ? "Drag to reorder on the shelf, or click to open" : undefined}
         style={{
           display: "flex",
           flexDirection: "row",
-          cursor: "pointer",
+          cursor: allowReorder ? (isReorderDragged ? "grabbing" : "grab") : "pointer",
           userSelect: "none",
           transformStyle: "preserve-3d",
           transform: bookTransform,
           filter: hovered
             ? "drop-shadow(6px 20px 28px rgba(0,0,0,0.32))"
             : "drop-shadow(4px 8px 16px rgba(0,0,0,0.22))",
-          opacity: departing ? 0 : 1,
+          opacity: departing ? 0 : isReorderDragged ? 0.42 : 1,
           transition: departing
             ? "transform 200ms ease-in, opacity 200ms ease-in"
             : "transform 300ms cubic-bezier(0.25,0.46,0.45,0.94), filter 300ms ease, opacity 200ms ease",
@@ -437,12 +463,28 @@ function ShelfRow({
   folderLocked,
   searchQuery,
   onDelete,
+  allowReorder = false,
+  draggingFileId,
+  dragOverFileId,
+  onBookDragStart,
+  onBookDragEnd,
+  onBookDragOver,
+  onBookDragLeave,
+  onBookDrop,
 }: {
   files: FolderFile[];
   isAdmin: boolean;
   folderLocked: boolean;
   searchQuery: string;
   onDelete: (file: FolderFile) => void;
+  allowReorder?: boolean;
+  draggingFileId: string | null;
+  dragOverFileId: string | null;
+  onBookDragStart: (fileId: string, e: DragEvent<HTMLDivElement>) => void;
+  onBookDragEnd: (e: DragEvent<HTMLDivElement>) => void;
+  onBookDragOver: (fileId: string, e: DragEvent<HTMLDivElement>) => void;
+  onBookDragLeave: (fileId: string, e: DragEvent<HTMLDivElement>) => void;
+  onBookDrop: (fileId: string, e: DragEvent<HTMLDivElement>) => void;
 }) {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
@@ -466,6 +508,14 @@ function ShelfRow({
               folderLocked={folderLocked}
               searchQuery={searchQuery}
               onDelete={onDelete}
+              allowReorder={allowReorder}
+              isReorderDragged={allowReorder && draggingFileId === file.id}
+              isReorderDropTarget={allowReorder && dragOverFileId === file.id}
+              onReorderDragStart={(e) => onBookDragStart(file.id, e)}
+              onReorderDragEnd={onBookDragEnd}
+              onReorderDragOver={(e) => onBookDragOver(file.id, e)}
+              onReorderDragLeave={(e) => onBookDragLeave(file.id, e)}
+              onReorderDrop={(e) => onBookDrop(file.id, e)}
               adjacentShift={
                 hoveredIdx !== null
                   ? idx === hoveredIdx - 1 ? -6
@@ -848,13 +898,71 @@ export function BookshelfView({
   folderLocked,
   searchQuery,
   onDelete,
+  allowReorder = false,
+  reorderSaving = false,
+  onReorder,
 }: {
   files: FolderFile[];
   isAdmin: boolean;
   folderLocked: boolean;
   searchQuery: string;
   onDelete: (file: FolderFile) => void;
+  allowReorder?: boolean;
+  reorderSaving?: boolean;
+  onReorder?: (next: FolderFile[]) => void;
 }) {
+  const [draggingFileId, setDraggingFileId] = useState<string | null>(null);
+  const [dragOverFileId, setDragOverFileId] = useState<string | null>(null);
+  const dragSourceRef = useRef<string | null>(null);
+
+  const reorderActive = allowReorder && !!onReorder;
+
+  const onBookDragStart = useCallback((fileId: string, e: DragEvent<HTMLDivElement>) => {
+    if (!reorderActive) return;
+    dragSourceRef.current = fileId;
+    setDraggingFileId(fileId);
+    e.dataTransfer.setData("text/plain", fileId);
+    e.dataTransfer.effectAllowed = "move";
+  }, [reorderActive]);
+
+  const onBookDragEnd = useCallback(() => {
+    dragSourceRef.current = null;
+    setDraggingFileId(null);
+    setDragOverFileId(null);
+  }, []);
+
+  const onBookDragOver = useCallback((fileId: string, e: DragEvent<HTMLDivElement>) => {
+    if (!reorderActive) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const from = dragSourceRef.current;
+    if (from && from !== fileId) setDragOverFileId(fileId);
+  }, [reorderActive]);
+
+  const onBookDragLeave = useCallback((fileId: string, e: DragEvent<HTMLDivElement>) => {
+    if (!reorderActive) return;
+    const next = e.relatedTarget as Node | null;
+    if (!e.currentTarget.contains(next)) {
+      setDragOverFileId((prev) => (prev === fileId ? null : prev));
+    }
+  }, [reorderActive]);
+
+  const onBookDrop = useCallback((fileId: string, e: DragEvent<HTMLDivElement>) => {
+    if (!reorderActive || !onReorder) return;
+    e.preventDefault();
+    const fromId = e.dataTransfer.getData("text/plain") || dragSourceRef.current || draggingFileId;
+    if (!fromId || fromId === fileId) {
+      dragSourceRef.current = null;
+      setDraggingFileId(null);
+      setDragOverFileId(null);
+      return;
+    }
+    dragSourceRef.current = null;
+    onReorder(reorderFileList(files, fromId, fileId));
+    setDraggingFileId(null);
+    setDragOverFileId(null);
+  }, [reorderActive, onReorder, files, draggingFileId]);
+
   const rows: FolderFile[][] = [];
   for (let i = 0; i < Math.max(files.length, 1); i += BOOKS_PER_SHELF) {
     rows.push(files.slice(i, i + BOOKS_PER_SHELF));
@@ -867,6 +975,12 @@ export function BookshelfView({
         href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Serif+4:ital,wght@0,300;0,400;1,300&display=swap"
       />
       <div>
+        {reorderActive && (
+          <p style={{ fontFamily: fontSerif, fontSize: 12, color: C.muted, marginBottom: 14, lineHeight: 1.45 }}>
+            Drag a volume to another spot on the shelf to reorder. Order is saved for everyone.
+            {reorderSaving ? " Saving…" : ""}
+          </p>
+        )}
         {files.length === 0 ? (
           <EmptyShelf />
         ) : (
@@ -878,6 +992,14 @@ export function BookshelfView({
               folderLocked={folderLocked}
               searchQuery={searchQuery}
               onDelete={onDelete}
+              allowReorder={reorderActive}
+              draggingFileId={draggingFileId}
+              dragOverFileId={dragOverFileId}
+              onBookDragStart={onBookDragStart}
+              onBookDragEnd={onBookDragEnd}
+              onBookDragOver={onBookDragOver}
+              onBookDragLeave={onBookDragLeave}
+              onBookDrop={onBookDrop}
             />
           ))
         )}
