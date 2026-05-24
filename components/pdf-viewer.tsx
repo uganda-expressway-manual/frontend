@@ -234,6 +234,9 @@ export function PDFViewer({
   const panLastClientRef = useRef({ x: 0, y: 0 });
   const panDragMovedRef = useRef(false);
   const [isPanningViewport, setIsPanningViewport] = useState(false);
+  const [showBottomPageScrubber, setShowBottomPageScrubber] = useState(false);
+  const [isPageScrubbing, setIsPageScrubbing] = useState(false);
+  const [scrubberPage, setScrubberPage] = useState(1);
   const normalizedKeyword = highlightEnabled ? keyword.trim().toLowerCase() : "";
   const bookmarkedSet = useMemo(() => new Set(bookmarkedPages), [bookmarkedPages]);
   /** Highlights grouped by PDF page once per render so each `<BookPage>` only sees the entries it cares about. */
@@ -256,6 +259,7 @@ export function PDFViewer({
     return map;
   }, [pageHighlights]);
   const FLIP_DURATION = 460;
+  const FULLSCREEN_BOTTOM_SCRUBBER_ZONE_PX = 80;
   const zoomPercent = Math.round(pinchZoomScale * visualViewportScale * 100);
   const zoomHudPercent = isFullscreen
     ? Math.round(snapScaleToFullscreenPreset(pinchZoomScale) * 100)
@@ -610,6 +614,8 @@ export function PDFViewer({
 
   const canFlipNext = isSinglePageView ? currentPage < numPages : effectiveDesktopLeftPage + 2 <= numPages;
   const canFlipPrev = isSinglePageView ? currentPage > 1 : effectiveDesktopLeftPage > 1;
+  const showFullscreenPageScrubber =
+    isFullscreen && numPages > 1 && (showBottomPageScrubber || isPageScrubbing);
   const fullscreenZoomMax = FULLSCREEN_ZOOM_SCALES[FULLSCREEN_ZOOM_SCALES.length - 1];
   /** Zoom chrome and pinch steps only in fullscreen; optional `preview` URL disables there too. */
   const showZoomUi = isFullscreen && !previewMode;
@@ -665,7 +671,7 @@ export function PDFViewer({
         return;
       }
       const target = event.target as HTMLElement;
-      if (target.closest("[data-pdf-zoom-controls]")) {
+      if (target.closest("[data-pdf-zoom-controls]") || target.closest("[data-pdf-page-scrubber]")) {
         return;
       }
       if (event.pointerType === "mouse" && event.button !== 0) {
@@ -807,6 +813,85 @@ export function PDFViewer({
     }, FLIP_DURATION);
   };
 
+  const goToPage = useCallback(
+    (page: number) => {
+      if (!numPages) {
+        return;
+      }
+      const target = clampPage(page, numPages);
+      const resolved = isSinglePageView ? target : toSpreadStart(target);
+      if (resolved === currentPage) {
+        return;
+      }
+      if (flipTimerRef.current !== null) {
+        window.clearTimeout(flipTimerRef.current);
+        flipTimerRef.current = null;
+      }
+      setFlipDirection(null);
+      setMobileTransition(null);
+      setCurrentPage(resolved);
+    },
+    [currentPage, isSinglePageView, numPages],
+  );
+
+  const onViewportMouseMove = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (!isFullscreen || numPages <= 1 || isPageScrubbing) {
+        return;
+      }
+      const el = viewportRef.current;
+      if (!el) {
+        return;
+      }
+      const rect = el.getBoundingClientRect();
+      const distanceFromBottom = rect.bottom - event.clientY;
+      setShowBottomPageScrubber(distanceFromBottom <= FULLSCREEN_BOTTOM_SCRUBBER_ZONE_PX);
+    },
+    [isFullscreen, isPageScrubbing, numPages],
+  );
+
+  const onViewportMouseLeave = useCallback(() => {
+    if (!isPageScrubbing) {
+      setShowBottomPageScrubber(false);
+    }
+  }, [isPageScrubbing]);
+
+  const onPageScrubberPointerDown = useCallback(() => {
+    setScrubberPage(currentPage);
+    setIsPageScrubbing(true);
+  }, [currentPage]);
+
+  const onPageScrubberPointerEnd = useCallback(() => {
+    setIsPageScrubbing(false);
+    setShowBottomPageScrubber(false);
+  }, []);
+
+  useEffect(() => {
+    if (!isPageScrubbing) {
+      setScrubberPage(currentPage);
+    }
+  }, [currentPage, isPageScrubbing]);
+
+  useEffect(() => {
+    if (!isPageScrubbing) {
+      return;
+    }
+    const end = () => onPageScrubberPointerEnd();
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+    return () => {
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+    };
+  }, [isPageScrubbing, onPageScrubberPointerEnd]);
+
+  useEffect(() => {
+    if (!isFullscreen) {
+      setShowBottomPageScrubber(false);
+      setIsPageScrubbing(false);
+    }
+  }, [isFullscreen]);
+
   useEffect(() => {
     if (!isFullscreen) {
       return;
@@ -924,6 +1009,8 @@ export function PDFViewer({
           ...(!isFullscreen ? getCoverSurfaceStyle(coverTone) : {}),
         }}
         onClickCapture={onViewportClickCapture}
+        onMouseMove={onViewportMouseMove}
+        onMouseLeave={onViewportMouseLeave}
         onPointerDown={onPanPointerDown}
         onPointerMove={onPanPointerMove}
         onPointerUp={onPanPointerUp}
@@ -1221,6 +1308,56 @@ export function PDFViewer({
             <div className="absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-slate-500/20 to-transparent" />
           </div>
         )}
+
+        {isFullscreen && numPages > 1 && (
+          <div
+            data-pdf-page-scrubber
+            className={[
+              "absolute inset-x-0 bottom-0 z-40 flex flex-col justify-end transition-opacity duration-200",
+              showFullscreenPageScrubber ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0",
+            ].join(" ")}
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <div
+              className={[
+                "flex flex-col gap-2 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-10",
+                "bg-gradient-to-t from-slate-900/55 via-slate-900/25 to-transparent",
+              ].join(" ")}
+            >
+              <div className="flex items-center justify-between gap-3 text-[11px] font-medium text-white/90">
+                <span>
+                  {rightPage && !isSinglePageView
+                    ? `Pages ${leftPage}–${rightPage}`
+                    : `Page ${currentPage}`}
+                </span>
+                <span className="text-white/65">{numPages} pages</span>
+              </div>
+              <input
+                type="range"
+                min={1}
+                max={numPages}
+                step={1}
+                value={scrubberPage}
+                onChange={(event) => {
+                  const page = Number(event.target.value);
+                  setScrubberPage(page);
+                  goToPage(page);
+                }}
+                onInput={(event) => {
+                  const page = Number(event.currentTarget.value);
+                  setScrubberPage(page);
+                  goToPage(page);
+                }}
+                onPointerDown={(event) => {
+                  onPageScrubberPointerDown();
+                  event.stopPropagation();
+                }}
+                aria-label={`Go to page, currently page ${currentPage} of ${numPages}`}
+                className="pdf-fullscreen-page-scrubber h-2 w-full cursor-pointer appearance-none rounded-full bg-white/25 accent-white"
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {!isFullscreen && (
@@ -1324,6 +1461,38 @@ export function PDFViewer({
             transform: translateX(0) scale(1);
             opacity: 1;
           }
+        }
+
+        .pdf-fullscreen-page-scrubber::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 14px;
+          height: 14px;
+          border-radius: 9999px;
+          background: #ffffff;
+          border: 2px solid rgba(15, 23, 42, 0.35);
+          box-shadow: 0 1px 4px rgba(15, 23, 42, 0.35);
+          cursor: grab;
+        }
+
+        .pdf-fullscreen-page-scrubber:active::-webkit-slider-thumb {
+          cursor: grabbing;
+        }
+
+        .pdf-fullscreen-page-scrubber::-moz-range-thumb {
+          width: 14px;
+          height: 14px;
+          border-radius: 9999px;
+          background: #ffffff;
+          border: 2px solid rgba(15, 23, 42, 0.35);
+          box-shadow: 0 1px 4px rgba(15, 23, 42, 0.35);
+          cursor: grab;
+        }
+
+        .pdf-fullscreen-page-scrubber::-moz-range-track {
+          height: 8px;
+          border-radius: 9999px;
+          background: rgba(255, 255, 255, 0.25);
         }
       `}</style>
     </Document>
