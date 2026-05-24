@@ -13,6 +13,9 @@ function normalizeRole(value: unknown): UserRole {
     if (r === "ADMIN" || r === "ADMINISTRATOR" || r === "SUPERADMIN" || r === "ROOT") {
       return "ADMIN";
     }
+    if (r === "VIEWER" || r === "READONLY" || r === "READ_ONLY") {
+      return "VIEWER";
+    }
     if (r === "USER" || r === "MEMBER" || r === "STANDARD") {
       return "USER";
     }
@@ -70,7 +73,7 @@ export function normalizeAuthUser(input: unknown): AuthUser | null {
   const username =
     typeof usernameRaw === "string" && usernameRaw.trim().length > 0 ? usernameRaw.trim() : undefined;
 
-  const roleRaw = o.role ?? o.userRole ?? o.type;
+  const roleRaw = o.role ?? o.userRole ?? o.type ?? o.privilege;
 
   const status = parseUserStatus(o.status ?? o.userStatus ?? o.accountStatus);
 
@@ -102,6 +105,10 @@ export function normalizeAuthUser(input: unknown): AuthUser | null {
 
 export function isAdminUser(user: AuthUser | null | undefined): boolean {
   return user?.role === "ADMIN";
+}
+
+export function isViewerUser(user: AuthUser | null | undefined): boolean {
+  return user?.role === "VIEWER";
 }
 
 /**
@@ -176,10 +183,11 @@ export function authUserFromAccessToken(token: string, fallbackEmail?: string): 
       email,
       role: normalizeRole(
         json.role ??
-          json.userRole ??
-          rolesArray ??
-          json["https://example.com/role"] ??
-          json["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"],
+        json.userRole ??
+        json.privilege ??
+        rolesArray ??
+        json["https://example.com/role"] ??
+        json["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"],
       ),
       ...(statusFromJwt ? { status: statusFromJwt } : {}),
     };
@@ -229,7 +237,7 @@ export function resolveAuthUserFromCredentialResponse(payload: unknown, fallback
       ? emailRaw.trim().toLowerCase()
       : emailFallback;
 
-  const roleRaw = r.role ?? r.userRole;
+  const roleRaw = r.role ?? r.userRole ?? r.privilege;
   const statusFlat = parseUserStatus(r.status ?? r.userStatus ?? r.accountStatus);
 
   const usernameFlat = usernameFlatEarly;

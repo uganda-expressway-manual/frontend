@@ -324,27 +324,6 @@ function getMobilePage(pageIndex, onLoginClick) {
   return getSpreadContent(spread, side, onLoginClick);
 }
 
-function playPaperRustle() {
-  try {
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) return;
-    const ctx  = new Ctx();
-    const osc  = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(380, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(180, ctx.currentTime + 0.09);
-    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.022, ctx.currentTime + 0.012);
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.09);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.09);
-    window.setTimeout(() => ctx.close(), 200);
-  } catch { /* ignore */ }
-}
-
 // ─── BookCover (static, closed state) ────────────────────────────────────────
 
 function BookCover({ onClick, tiltEnabled = true }) {
@@ -902,14 +881,12 @@ export default function BookHomepage({ onLoginClick }) {
       setMobileFlipFrom(mobilePageIndex);
       setMobilePageIndex((p) => p + 1);
       setPhase('FLIPPING_FWD');
-      playPaperRustle();
       window.setTimeout(() => setPhase('OPEN'), FLIP_MS + 30);
     } else {
       if (spread >= LAST_SPREAD) return;
       setFlipFromSpread(spread);
       setSpread((p) => p + 1);
       setPhase('FLIPPING_FWD');
-      playPaperRustle();
       window.setTimeout(() => setPhase('OPEN'), FLIP_MS + 30);
     }
   }, [phase, spread, mobilePageIndex, isMobile]);
@@ -921,14 +898,12 @@ export default function BookHomepage({ onLoginClick }) {
       setMobileFlipFrom(mobilePageIndex);
       setMobilePageIndex((p) => p - 1);
       setPhase('FLIPPING_BWD');
-      playPaperRustle();
       window.setTimeout(() => setPhase('OPEN'), FLIP_MS + 30);
     } else {
       if (spread === 0) { closeBook(); return; }
       setFlipFromSpread(spread);
       setSpread((p) => p - 1);
       setPhase('FLIPPING_BWD');
-      playPaperRustle();
       window.setTimeout(() => setPhase('OPEN'), FLIP_MS + 30);
     }
   }, [phase, spread, mobilePageIndex, isMobile, closeBook]);

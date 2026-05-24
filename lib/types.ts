@@ -1,4 +1,4 @@
-export type UserRole = "ADMIN" | "USER";
+export type UserRole = "ADMIN" | "USER" | "VIEWER";
 
 export type UserStatus = "WAITING" | "APPROVED" | "REJECTED";
 

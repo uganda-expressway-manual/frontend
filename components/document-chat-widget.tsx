@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ReactNode } from "react";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { useMutation } from "@tanstack/react-query";
 import axios from "axios";
@@ -20,6 +20,7 @@ const C = {
 };
 const fontSerif = "'Playfair Display', Georgia, serif";
 const fontBody  = "'Source Serif 4', Georgia, serif";
+const PANEL_TRANSITION_MS = 320;
 
 /* ── Interfaces (unchanged) ── */
 interface ChatMessage {
@@ -109,8 +110,6 @@ export function DocumentChatWidget({
     text: buildInitialGreeting(folderId, contextLabel),
   }]);
   const [assistantTyping, setAssistantTyping] = useState<AssistantTypingState | null>(null);
-  const [showTooltip,     setShowTooltip]     = useState(false);
-  const [tooltipDismissed,setTooltipDismissed]= useState(false);
   const [tabHovered,      setTabHovered]      = useState(false);
   const [panelVisible,    setPanelVisible]    = useState(false);
 
@@ -118,7 +117,7 @@ export function DocumentChatWidget({
   const requestSequenceRef = useRef(0);
   const blockedRequestIdsRef = useRef<Set<number>>(new Set());
   const textareaRef        = useRef<HTMLTextAreaElement | null>(null);
-  const tooltipTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closeTimerRef        = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isModelMenuOpen,  setIsModelMenuOpen]  = useState(false);
   const modelMenuRef       = useRef<HTMLDivElement | null>(null);
 
@@ -155,32 +154,46 @@ export function DocumentChatWidget({
     };
   }, [isModelMenuOpen]);
 
-  /* ── Idle tooltip: show after 3s, hide after 4s ── */
-  useEffect(() => {
-    if (isChatOpen || tooltipDismissed) return;
-    tooltipTimerRef.current = setTimeout(() => {
-      setShowTooltip(true);
-      setTimeout(() => setShowTooltip(false), 4000);
-    }, 3000);
-    return () => {
-      if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
-    };
-  }, [isChatOpen, tooltipDismissed]);
+  const openChat = useCallback(() => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    setTabHovered(false);
+    setIsChatOpen(true);
+  }, []);
 
-  /* ── / keyboard shortcut ── */
+  const closeChat = useCallback(() => {
+    if (!isChatOpen) return;
+    setPanelVisible(false);
+    setTabHovered(false);
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => {
+      setIsChatOpen(false);
+      closeTimerRef.current = null;
+    }, PANEL_TRANSITION_MS);
+  }, [isChatOpen]);
+
+  useEffect(() => () => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+  }, []);
+
+  /* ── / keyboard shortcut (toggle) ── */
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "/" || isChatOpen) return;
-      const tag = (e.target as HTMLElement).tagName?.toLowerCase();
-      if (tag === "input" || tag === "textarea" || (e.target as HTMLElement).isContentEditable) return;
+      if (e.key !== "/") return;
+      const target = e.target as HTMLElement;
+      const tag = target.tagName?.toLowerCase();
+      const isEditable =
+        tag === "input" || tag === "textarea" || target.isContentEditable;
+      if (isEditable) return;
       e.preventDefault();
-      setIsChatOpen(true);
-      setTooltipDismissed(true);
-      setShowTooltip(false);
+      if (isChatOpen) closeChat();
+      else openChat();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [isChatOpen]);
+  }, [isChatOpen, openChat, closeChat]);
 
   /* ── Model init ── */
   useEffect(() => {
@@ -283,12 +296,6 @@ export function DocumentChatWidget({
     setAssistantTyping(null);
   };
 
-  const openChat = () => {
-    setIsChatOpen(true);
-    setTooltipDismissed(true);
-    setShowTooltip(false);
-  };
-
   const isConversationRunning = chatMutation.isPending || Boolean(assistantTyping);
   const inputEmpty = !chatInput.trim();
   const selectedModelLabel =
@@ -306,17 +313,8 @@ export function DocumentChatWidget({
           0%,100% { opacity: 1; }
           50%      { opacity: 0.4; }
         }
-        @keyframes lib-tooltip-fade {
-          0%   { opacity: 0; transform: translateY(6px); }
-          15%  { opacity: 1; transform: translateY(0); }
-          85%  { opacity: 1; transform: translateY(0); }
-          100% { opacity: 0; transform: translateY(6px); }
-        }
         .lib-consulting-text {
           animation: lib-consulting-pulse 900ms ease-in-out infinite;
-        }
-        .lib-tooltip-pill {
-          animation: lib-tooltip-fade 4s ease forwards;
         }
         .lib-chat-scrollbar {
           scrollbar-width: thin;
@@ -330,17 +328,14 @@ export function DocumentChatWidget({
       {/* ── Collapsed bookmark tab ── */}
       {!isChatOpen && (
         <div style={{ position: "fixed", bottom: 32, right: 32, zIndex: 40, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }} className={stackZClass}>
-          {/* Idle tooltip */}
-          {showTooltip && (
-            <div className="lib-tooltip-pill" style={{
-              background: C.navy, color: C.paper,
-              fontFamily: fontBody, fontSize: 11, fontStyle: "italic",
-              padding: "5px 12px", borderRadius: 20,
-              pointerEvents: "none", whiteSpace: "nowrap",
-            }}>
-              Press / to open AI chat
-            </div>
-          )}
+          <div style={{
+            background: C.navy, color: C.paper,
+            fontFamily: fontBody, fontSize: 11, fontStyle: "italic",
+            padding: "5px 12px", borderRadius: 20,
+            pointerEvents: "none", whiteSpace: "nowrap",
+          }}>
+            Press / to open AI chat
+          </div>
           <button
             onClick={openChat}
             onMouseEnter={() => setTabHovered(true)}
@@ -358,7 +353,7 @@ export function DocumentChatWidget({
               transform: tabHovered ? "translateY(-3px)" : "translateY(0)",
               transition: "background 200ms, transform 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94)",
             }}
-            title="Open AI chat (/)"
+            title="Press / to open AI chat"
           >
             <BookIcon size={15} color={tabHovered ? "white" : C.gold} />
             AI
@@ -377,7 +372,9 @@ export function DocumentChatWidget({
             overflow: "hidden",
             boxShadow: "0 -8px 40px rgba(0,0,0,0.18), 0 -2px 8px rgba(0,0,0,0.08)",
             transform: panelVisible ? "translateY(0)" : "translateY(100%)",
-            transition: "transform 320ms cubic-bezier(0.25, 0.46, 0.45, 0.94)",
+            opacity: panelVisible ? 1 : 0,
+            pointerEvents: panelVisible ? "auto" : "none",
+            transition: `transform ${PANEL_TRANSITION_MS}ms cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity ${PANEL_TRANSITION_MS}ms ease`,
           }}
           className={stackZClass}
         >
@@ -408,7 +405,7 @@ export function DocumentChatWidget({
                 </div>
               </div>
               <button
-                onClick={() => setIsChatOpen(false)}
+                onClick={closeChat}
                 aria-label="Close chat"
                 style={{
                   background: "none", border: "none", cursor: "pointer",

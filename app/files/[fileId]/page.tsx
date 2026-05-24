@@ -24,6 +24,8 @@ import {
   updateNote,
 } from "@/lib/api";
 import { triggerDirectDownload } from "@/lib/pdf-download";
+import { isViewerUser } from "@/lib/auth-user";
+import { useAuth } from "@/lib/hooks/use-auth";
 import { READER_CHAT_ROOM } from "@/lib/reader-chat-room";
 import { useFixedChromeInverseScale } from "@/lib/hooks/use-fixed-chrome-inverse-scale";
 import { FileDetails, HighlightItem, NoteItem } from "@/lib/types";
@@ -103,6 +105,8 @@ export default function FileViewerPage() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const canDownloadPdf = !isViewerUser(user);
   const fileId = params.fileId;
   const keyword = searchParams.get("keyword") ?? "";
   const page = Number(searchParams.get("page") ?? "1");
@@ -937,13 +941,15 @@ export default function FileViewerPage() {
               >
                 Full screen
               </button>
-              <button
-                type="button"
-                onClick={() => void onDownload()}
-                className="rounded-md bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-700"
-              >
-                Download PDF
-              </button>
+              {canDownloadPdf && (
+                <button
+                  type="button"
+                  onClick={() => void onDownload()}
+                  className="rounded-md bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-700"
+                >
+                  Download PDF
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -1301,33 +1307,33 @@ export default function FileViewerPage() {
           ].join(" ")}
         >
           <PDFViewer
-              key={viewerPdfSrc}
-              fileUrl={viewerPdfSrc}
-              activePage={currentPage}
-              keyword={keyword}
-              activeKeywordHitPage={activeKeywordTarget?.page}
-              activeKeywordHitOccurrenceInPage={activeKeywordTarget?.occurrenceInPage}
-              bookmarkColor={bookmarkColor}
-              pageTone={pageTone}
-              coverTone={coverTone}
-              isFullscreen={isFullscreen}
-              previewMode={previewMode}
-              readerFabSizeRem={isFullscreen ? READER_CHAT_ROOM.fabSizeRem * 0.5 : undefined}
-              onCurrentPageChange={setCurrentPage}
-              onNumPagesChange={setTotalPages}
-              onVisiblePagesChange={setVisiblePages}
-              onDocumentLoadError={(err) => {
-                // Most common cause: S3 bucket CORS does not allow GET/Range from this origin
-                // for the presigned URL, or the URL has expired (presign TTL elapsed).
-                console.error(
-                  `[file-viewer] presigned PDF load failed for fileId=${fileId}: ${err.message}`,
-                );
-              }}
-              bookmarkedPages={bookmarkedPages}
-              pageHighlights={projectedPageHighlights}
-              defaultHighlightColor={getHighlightSwatch(highlightColor)}
-              onPdfTextSelected={setPdfTextSelection}
-            />
+            key={viewerPdfSrc}
+            fileUrl={viewerPdfSrc}
+            activePage={currentPage}
+            keyword={keyword}
+            activeKeywordHitPage={activeKeywordTarget?.page}
+            activeKeywordHitOccurrenceInPage={activeKeywordTarget?.occurrenceInPage}
+            bookmarkColor={bookmarkColor}
+            pageTone={pageTone}
+            coverTone={coverTone}
+            isFullscreen={isFullscreen}
+            previewMode={previewMode}
+            readerFabSizeRem={isFullscreen ? READER_CHAT_ROOM.fabSizeRem * 0.5 : undefined}
+            onCurrentPageChange={setCurrentPage}
+            onNumPagesChange={setTotalPages}
+            onVisiblePagesChange={setVisiblePages}
+            onDocumentLoadError={(err) => {
+              // Most common cause: S3 bucket CORS does not allow GET/Range from this origin
+              // for the presigned URL, or the URL has expired (presign TTL elapsed).
+              console.error(
+                `[file-viewer] presigned PDF load failed for fileId=${fileId}: ${err.message}`,
+              );
+            }}
+            bookmarkedPages={bookmarkedPages}
+            pageHighlights={projectedPageHighlights}
+            defaultHighlightColor={getHighlightSwatch(highlightColor)}
+            onPdfTextSelected={setPdfTextSelection}
+          />
         </div>
       </div>
       {/* Reader chat: `lib/reader-chat-room.ts` — fullscreen renders at full base size, non-fullscreen reader is halved. */}

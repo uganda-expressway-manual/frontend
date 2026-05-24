@@ -4,11 +4,11 @@ import { FormEvent, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { getBackendErrorMessage } from "@/lib/api-errors";
 import { isAdminUser } from "@/lib/auth-user";
-import { api, patchUserStatus, signUpApplicantUser } from "@/lib/api";
+import { api, patchUserPrivilege, patchUserStatus, signUpApplicantUser } from "@/lib/api";
 import { APP_PUBLIC_BASE_URL, APP_USERS_PORTAL_URL } from "@/lib/app-site";
 import { useAuth } from "@/lib/hooks/use-auth";
 import { parseUserStatus } from "@/lib/user-status";
-import { AppUser, UserStatus } from "@/lib/types";
+import { AppUser, UserRole, UserStatus } from "@/lib/types";
 import { DeleteUserConfirmDialog } from "@/components/delete-user-confirm-dialog";
 
 /**
@@ -77,6 +77,14 @@ export function AdminUsersPanel() {
     },
   });
 
+  const updatePrivilegeMutation = useMutation({
+    mutationFn: async ({ userId, role }: { userId: string; role: UserRole }) =>
+      patchUserPrivilege(userId, role),
+    onSuccess: () => {
+      void usersQuery.refetch();
+    },
+  });
+
   if (!isAdmin) {
     return null;
   }
@@ -97,7 +105,7 @@ export function AdminUsersPanel() {
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white px-3 py-2.5 shadow-sm sm:px-4">
         <div>
           <h2 className="text-lg font-semibold tracking-tight text-slate-900">User management</h2>
-          <p className="text-xs text-slate-600">Create accounts, approve status, remove users.</p>
+          <p className="text-xs text-slate-600">Create accounts, approve status, change roles, remove users.</p>
         </div>
         <p className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs font-medium text-slate-600">
           Admin
@@ -205,6 +213,7 @@ export function AdminUsersPanel() {
                   <th className="px-2 py-2 font-semibold">Email</th>
                   <th className="px-2 py-2 font-semibold">Username</th>
                   <th className="px-2 py-2 font-semibold">Status</th>
+                  <th className="px-2 py-2 font-semibold">Role</th>
                   <th className="px-2 py-2 font-semibold">Password</th>
                   <th className="px-2 py-2 font-semibold">Action</th>
                 </tr>
@@ -230,6 +239,27 @@ export function AdminUsersPanel() {
                         <option value="WAITING">WAITING</option>
                         <option value="APPROVED">APPROVED</option>
                         <option value="REJECTED">REJECTED</option>
+                      </select>
+                    </td>
+                    <td className="px-2 py-2">
+                      <select
+                        className="ui-input max-w-[11rem] py-1.5 text-xs"
+                        value={listedUser.role ?? "USER"}
+                        onChange={(event) =>
+                          updatePrivilegeMutation.mutate({
+                            userId: listedUser.id,
+                            role: event.target.value as UserRole,
+                          })
+                        }
+                        disabled={
+                          updatePrivilegeMutation.isPending &&
+                          updatePrivilegeMutation.variables?.userId === listedUser.id
+                        }
+                        aria-label={`Set role for ${listedUser.email}`}
+                      >
+                        <option value="USER">USER</option>
+                        <option value="VIEWER">VIEWER</option>
+                        <option value="ADMIN">ADMIN</option>
                       </select>
                     </td>
                     <td className="px-2 py-2">
@@ -313,6 +343,9 @@ export function AdminUsersPanel() {
         />
         {updateStatusMutation.error && (
           <p className="text-sm text-red-600">{getBackendErrorMessage(updateStatusMutation.error, "Failed to update status.")}</p>
+        )}
+        {updatePrivilegeMutation.error && (
+          <p className="text-sm text-red-600">{getBackendErrorMessage(updatePrivilegeMutation.error, "Failed to update role.")}</p>
         )}
       </section>
     </section>

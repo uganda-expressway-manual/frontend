@@ -14,6 +14,7 @@ import {
   NoteItem,
   PdfPresignedUrlResponse,
   SignInResponse,
+  UserRole,
   UserStatus,
 } from "@/lib/types";
 
@@ -285,9 +286,14 @@ export async function signUpApplicantAdmin(payload: ApplicantSignUpPayload): Pro
   await api.post(USERS_SIGNUP_ROUTES.admin, payload);
 }
 
-/** PATCH `/users/:userId` — e.g. `{ status: "WAITING" }`. */
+/** PATCH `/users/:userId/status` — e.g. `{ status: "APPROVED" }`. */
 export async function patchUserStatus(userId: string, status: UserStatus): Promise<void> {
-  await api.patch(`/users/${userId}`, { status });
+  await api.patch(`/users/${userId}/status`, { status });
+}
+
+/** PATCH `/users/:userId/privilege` — e.g. `{ role: "VIEWER" }`. */
+export async function patchUserPrivilege(userId: string, role: UserRole): Promise<void> {
+  await api.patch(`/users/${userId}/privilege`, { role });
 }
 
 function collectBackendAuthErrorText(data: unknown): string {
