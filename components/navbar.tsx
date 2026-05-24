@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import { signOut } from "@/lib/api";
 import { hasAuthSession } from "@/lib/auth-session";
-import { isAdminUser } from "@/lib/auth-user";
+import { formatUserRoleLabel, isAdminUser } from "@/lib/auth-user";
 import { useAuth } from "@/lib/hooks/use-auth";
 
 const fontSerif = "'Playfair Display', Georgia, serif";
@@ -155,7 +155,7 @@ export function Navbar() {
                     letterSpacing: "0.07em", textTransform: "uppercase",
                     marginBottom: 3,
                   }}>
-                    {canManageUsers ? "Administrator" : "Member"}
+                    {formatUserRoleLabel(user?.role)}
                   </p>
                   <p style={{
                     fontFamily: fontBody, fontSize: 12, color: C.navy,

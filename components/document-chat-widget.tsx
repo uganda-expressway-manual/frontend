@@ -11,15 +11,15 @@ import { rehypeAppendStreamCursor } from "@/lib/rehype-append-stream-cursor";
 
 /* ── Design tokens ── */
 const C = {
-  navy:   "#1a2744",
-  gold:   "#c97c2a",
-  paper:  "#faf8f3",
+  navy: "#1a2744",
+  gold: "#c97c2a",
+  paper: "#faf8f3",
   border: "#d0c4aa",
-  muted:  "#8a7a60",
-  bg:     "#f4f1ec",
+  muted: "#8a7a60",
+  bg: "#f4f1ec",
 };
 const fontSerif = "'Playfair Display', Georgia, serif";
-const fontBody  = "'Source Serif 4', Georgia, serif";
+const fontBody = "'Source Serif 4', Georgia, serif";
 const PANEL_TRANSITION_MS = 320;
 
 /* ── Interfaces (unchanged) ── */
@@ -42,8 +42,8 @@ interface ChatModelOption {
 
 const CHATBOT_REQUEST_URLS = {
   library: "/chatbot/chat",
-  folder:  "/chatbot/chat",
-  reader:  "/chatbot/chat",
+  folder: "/chatbot/chat",
+  reader: "/chatbot/chat",
 } as const;
 
 type ChatRequestContext = keyof typeof CHATBOT_REQUEST_URLS;
@@ -54,16 +54,16 @@ function resolveChatRequestContext(folderId: string, layout: "default" | "reader
 }
 
 interface DocumentChatWidgetProps {
-  folderId?:        string;
-  stackZClass?:     string;
-  layout?:          "default" | "reader";
+  folderId?: string;
+  stackZClass?: string;
+  layout?: "default" | "reader";
   readerFullscreen?: boolean;
   /** Optional display name for the current folder/context */
-  contextLabel?:    string;
+  contextLabel?: string;
 }
 
 const CHAT_MODEL_OPTIONS: readonly ChatModelOption[] = [
-  { id: "gemini-2.5-flash",      label: "Gemini 2.5 Flash" },
+  { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
   { id: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite" },
 ];
 
@@ -101,28 +101,28 @@ export function DocumentChatWidget({
   layout = "default",
   contextLabel,
 }: DocumentChatWidgetProps) {
-  const [isChatOpen,      setIsChatOpen]      = useState(false);
-  const [chatInput,       setChatInput]       = useState("");
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatInput, setChatInput] = useState("");
   const [selectedModelId, setSelectedModelId] = useState("");
-  const [chatMessages,    setChatMessages]    = useState<ChatMessage[]>(() => [{
-    id:   "assistant-greeting",
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => [{
+    id: "assistant-greeting",
     role: "assistant",
     text: buildInitialGreeting(folderId, contextLabel),
   }]);
   const [assistantTyping, setAssistantTyping] = useState<AssistantTypingState | null>(null);
-  const [tabHovered,      setTabHovered]      = useState(false);
-  const [panelVisible,    setPanelVisible]    = useState(false);
+  const [tabHovered, setTabHovered] = useState(false);
+  const [panelVisible, setPanelVisible] = useState(false);
 
-  const chatViewportRef    = useRef<HTMLDivElement | null>(null);
+  const chatViewportRef = useRef<HTMLDivElement | null>(null);
   const requestSequenceRef = useRef(0);
   const blockedRequestIdsRef = useRef<Set<number>>(new Set());
-  const textareaRef        = useRef<HTMLTextAreaElement | null>(null);
-  const closeTimerRef        = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [isModelMenuOpen,  setIsModelMenuOpen]  = useState(false);
-  const modelMenuRef       = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
+  const modelMenuRef = useRef<HTMLDivElement | null>(null);
 
   const chatRequestContext = resolveChatRequestContext(folderId, layout);
-  const chatRequestUrl     = CHATBOT_REQUEST_URLS[chatRequestContext];
+  const chatRequestUrl = CHATBOT_REQUEST_URLS[chatRequestContext];
 
   /* ── Animate panel open/close ── */
   useEffect(() => {
@@ -223,7 +223,7 @@ export function DocumentChatWidget({
     const delay = /[,.!?]/.test(currentChar) ? 85 : /\s/.test(currentChar) ? 22 : 14;
     const timer = window.setTimeout(() => {
       const nextCursor = assistantTyping.cursor + 1;
-      const nextText   = assistantTyping.fullText.slice(0, nextCursor);
+      const nextText = assistantTyping.fullText.slice(0, nextCursor);
       setChatMessages(prev => {
         const idx = prev.findIndex(m => m.id === assistantTyping.messageId);
         if (idx < 0) return [...prev, {
@@ -334,7 +334,7 @@ export function DocumentChatWidget({
             padding: "5px 12px", borderRadius: 20,
             pointerEvents: "none", whiteSpace: "nowrap",
           }}>
-            Press / to open AI chat
+            Press " / " to open AI chat
           </div>
           <button
             onClick={openChat}
@@ -353,7 +353,7 @@ export function DocumentChatWidget({
               transform: tabHovered ? "translateY(-3px)" : "translateY(0)",
               transition: "background 200ms, transform 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94)",
             }}
-            title="Press / to open AI chat"
+            title='Press "/"   to open AI chat'
           >
             <BookIcon size={15} color={tabHovered ? "white" : C.gold} />
             AI
@@ -651,7 +651,7 @@ export function DocumentChatWidget({
               onChange={v => setChatInput(v)}
               onEnterSubmit={() => {
                 if (!inputEmpty && !isConversationRunning) {
-                  const fakeEvent = { preventDefault: () => {} } as FormEvent<HTMLFormElement>;
+                  const fakeEvent = { preventDefault: () => { } } as FormEvent<HTMLFormElement>;
                   submitChatMessage(fakeEvent);
                 }
               }}
@@ -756,8 +756,8 @@ function getChatbotErrorMessage(error: unknown): string {
     if (typeof data === "string" && data.trim()) return data.trim();
     if (data && typeof data === "object") {
       if (typeof data.message === "string" && data.message.trim()) return data.message.trim();
-      if (typeof data.error   === "string" && data.error.trim())   return data.error.trim();
-      if (typeof data.detail  === "string" && data.detail.trim())  return data.detail.trim();
+      if (typeof data.error === "string" && data.error.trim()) return data.error.trim();
+      if (typeof data.detail === "string" && data.detail.trim()) return data.detail.trim();
     }
     const status = error.response?.status;
     if (status) {
@@ -775,8 +775,8 @@ function resolveChatbotResponse(payload: unknown): { answer: string; referencedP
   if (!payload || typeof payload !== "object") return { answer: "", referencedPages: [] };
   const r = payload as Record<string, unknown>;
   const answer =
-    (typeof r.answer   === "string" && r.answer)   ||
-    (typeof r.message  === "string" && r.message)  ||
+    (typeof r.answer === "string" && r.answer) ||
+    (typeof r.message === "string" && r.message) ||
     (typeof r.response === "string" && r.response) || "";
   const directPages = normalizeReferencedPages(r.referencedPages);
   if (directPages.length > 0) return { answer, referencedPages: directPages };
@@ -784,8 +784,8 @@ function resolveChatbotResponse(payload: unknown): { answer: string; referencedP
   if (data && typeof data === "object") {
     const n = data as Record<string, unknown>;
     const nestedAnswer =
-      (typeof n.answer   === "string" && n.answer)   ||
-      (typeof n.message  === "string" && n.message)  ||
+      (typeof n.answer === "string" && n.answer) ||
+      (typeof n.message === "string" && n.message) ||
       (typeof n.response === "string" && n.response) || answer;
     return { answer: nestedAnswer, referencedPages: normalizeReferencedPages(n.referencedPages) };
   }
@@ -803,7 +803,7 @@ function toReferenceLink(entry: unknown, index: number): ChatReferenceLink | nul
   const hrefCandidate = r.href ?? r.url ?? r.link;
   if (typeof hrefCandidate === "string" && hrefCandidate.trim()) {
     return {
-      href:  hrefCandidate,
+      href: hrefCandidate,
       label: typeof r.label === "string" && r.label.trim() ? r.label : `Reference ${index + 1}`,
     };
   }
@@ -812,15 +812,15 @@ function toReferenceLink(entry: unknown, index: number): ChatReferenceLink | nul
   const pageCandidate = r.page ?? r.pageNumber;
   const pageNumber =
     typeof pageCandidate === "number" && Number.isFinite(pageCandidate) ? pageCandidate :
-    typeof pageCandidate === "string" && pageCandidate.trim() && Number.isFinite(Number(pageCandidate)) ? Number(pageCandidate) : null;
+      typeof pageCandidate === "string" && pageCandidate.trim() && Number.isFinite(Number(pageCandidate)) ? Number(pageCandidate) : null;
   const params = new URLSearchParams();
   if (pageNumber && pageNumber > 0) params.set("page", String(pageNumber));
   const href = params.toString() ? `/files/${fileIdCandidate}?${params.toString()}` : `/files/${fileIdCandidate}`;
   const filename = typeof r.filename === "string" ? r.filename.trim() : "";
   const label =
     typeof r.label === "string" && r.label.trim() ? r.label :
-    filename ? (pageNumber ? `${filename} - Page ${pageNumber}` : filename) :
-    pageNumber ? `Page ${pageNumber}` : `Reference ${index + 1}`;
+      filename ? (pageNumber ? `${filename} - Page ${pageNumber}` : filename) :
+        pageNumber ? `Page ${pageNumber}` : `Reference ${index + 1}`;
   return { href, label };
 }
 
@@ -840,7 +840,7 @@ function renderMessageText(
         h1: ({ children }) => <h1 className="mb-2 text-lg font-bold leading-snug last:mb-0">{children}</h1>,
         h2: ({ children }) => <h2 className="mb-2 text-base font-bold leading-snug last:mb-0">{children}</h2>,
         h3: ({ children }) => <h3 className="mb-2 text-sm font-semibold leading-snug last:mb-0">{children}</h3>,
-        p:  ({ children }) => <p className="mb-2 whitespace-pre-wrap break-words leading-relaxed last:mb-0">{children}</p>,
+        p: ({ children }) => <p className="mb-2 whitespace-pre-wrap break-words leading-relaxed last:mb-0">{children}</p>,
         ul: ({ children }) => <ul className="mb-2 list-disc space-y-1 pl-5 last:mb-0">{children}</ul>,
         ol: ({ children }) => <ol className="mb-2 list-decimal space-y-1 pl-5 last:mb-0">{children}</ol>,
         li: ({ children }) => <li>{children}</li>,

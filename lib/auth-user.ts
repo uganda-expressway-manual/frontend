@@ -111,6 +111,20 @@ export function isViewerUser(user: AuthUser | null | undefined): boolean {
   return user?.role === "VIEWER";
 }
 
+/** Human-readable label for profile UI and similar surfaces. */
+export function formatUserRoleLabel(role: UserRole | null | undefined): string {
+  switch (role) {
+    case "ADMIN":
+      return "Administrator";
+    case "VIEWER":
+      return "Viewer";
+    case "USER":
+      return "User";
+    default:
+      return "User";
+  }
+}
+
 /**
  * When HttpOnly cookies hide the JWT, UI still needs a stable AuthUser (role defaults until `/auth/me` or similar exists).
  */
