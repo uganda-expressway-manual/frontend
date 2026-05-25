@@ -594,7 +594,7 @@ export async function patchFileOrder(folderId: string, fileIds: string[]): Promi
  * - Wire JSON uses **1-based** `page` (same as the PDF viewer).
  * - List: `GET /notes/{fileId}` → array. One: `GET /notes/{fileId}/{noteId}`.
  * - Create: `POST /notes/{fileId}` body `{ page, body }` → 201 + note.
- * - Update: `PATCH /notes/{fileId}/{noteId}` with at least one of `page` | `body`.
+ * - Update: `PATCH /notes/{fileId}/{noteId}` body `{ page, body }`.
  * - Delete: `DELETE /notes/{fileId}/{noteId}`.
  */
 function notesPath(fileId: string, noteId?: string): string {
@@ -628,21 +628,22 @@ export async function createNote(payload: CreateNotePayload): Promise<NoteItem> 
   return data;
 }
 
-/**
- * Partial update (`PATCH`). Refetch notes or merge locally after success if the server returns 204.
- */
+export interface UpdateNotePayload {
+  /** 1-based PDF page. */
+  page: number;
+  body: string;
+}
+
+/** `PATCH /notes/:fileId/:noteId` — body `{ page, body }`. */
 export async function updateNote(
   fileId: string,
   noteId: string,
-  input: { body?: string; page?: number }
+  input: UpdateNotePayload
 ): Promise<void> {
-  const patchBody: { body?: string; page?: number } = {};
-  if (input.body !== undefined) patchBody.body = input.body;
-  if (input.page !== undefined) patchBody.page = input.page;
-  if (Object.keys(patchBody).length === 0) {
-    throw new Error("updateNote: provide at least one of page or body");
-  }
-  await api.patch(notesPath(fileId, noteId), patchBody);
+  await api.patch(notesPath(fileId, noteId), {
+    page: input.page,
+    body: input.body,
+  });
 }
 
 export async function deleteNote(fileId: string, noteId: string): Promise<void> {

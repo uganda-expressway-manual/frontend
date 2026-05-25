@@ -16,7 +16,7 @@ const SECTIONS = [
     chapter: 'Manual 1',
     title: 'Planning Manual',
     desc:
-      'A practical work guideline for road planning and traffic demand related to expressway planning, road traffic capacity and service level, and economic feasibility analysis.',
+      'This volume addresses road planning, traffic demand, highway capacity, level of service, and economic feasibility analysis for expressway programs. It establishes the analytical basis for corridor decisions and project justification.',
     bullets: [
       'Introduction and Scope',
       'Road Planning and Traffic Demand',
@@ -31,7 +31,7 @@ const SECTIONS = [
     chapter: 'Manual 2',
     title: 'Design Manual',
     desc:
-      'This manual provides practical design guidance for expressway projects across technical, geometric, economic, and environmental requirements. It emphasizes safety, environmental protection, and efficient vehicle operation throughout the design process.',
+      'This volume sets out design requirements for expressway projects across technical, geometric, economic, and environmental dimensions. Safety, environmental protection, and efficient vehicle operation are central to every design decision.',
     bullets: [
       'Volume 1: Geometric Design',
       'Volume 2: Earthwork & Drainage',
@@ -47,7 +47,7 @@ const SECTIONS = [
     chapter: 'Manual 3',
     title: 'Construction Management Manual',
     desc:
-      'Provides detailed information and guidance on all aspects of expressway construction projects. This manual covers safety, environment, quality, cost, schedule and other management aspects, enabling construction managers to manage expressway construction projects effectively. It is a practical work guide to support construction management.',
+      'This volume covers safety, environmental compliance, quality, cost, scheduling, and related controls for expressway construction projects. It equips construction managers with the procedures needed to deliver works effectively and in line with project objectives.',
     bullets: [
       {
         title: 'Volume 1: Manual for Major Construction Work',
@@ -70,7 +70,7 @@ const SECTIONS = [
     chapter: 'Manual 4',
     title: 'Construction Specification',
     desc:
-      'Comprehensive construction standards to be used for the construction of expressway civil engineering works and other similar unit works or the preparation of construction specifications, targeting all types of expressway construction works and consisting of civil works and auxiliary facilities.',
+      'This volume defines construction standards for expressway civil engineering works, ancillary facilities, and comparable unit works. Its series specifications support tendering, contracting, and field execution across all major work categories.',
     bullets: [
       {
         title: 'Volume 1: Series 1000 to 5000',
@@ -99,7 +99,7 @@ const SECTIONS = [
     chapter: 'Manual 5',
     title: 'Operation Manual',
     desc:
-      'A practical work guide that provides detailed information and guidance on all aspects of expressway operation, providing expressway operators with the tools and information they need to manage and maintain expressway operations effectively.',
+      'This volume addresses traffic management, incident response, facility upkeep, and customer-facing operations on expressways. Operators will find the procedures and reference material required to run the network safely and reliably.',
     bullets: [
       'General Operation',
       'Traffic Management',
@@ -113,7 +113,7 @@ const SECTIONS = [
     chapter: 'Manual 6',
     title: 'Maintenance Manual',
     desc:
-      'This manual summarizes guidelines and procedures for carrying out maintenance work such as facility maintenance, maintenance work, safety inspection, etc. of expressway facilities. It evaluates the condition of expressway facilities and performs necessary maintenance work. This is a practical work guide that identifies and supports safe and efficient expressway maintenance by providing standard procedures and guidelines.',
+      'This volume defines inspection, condition assessment, and maintenance procedures for expressway assets. Standard methods support safe, efficient upkeep of pavements, structures, drainage, tunnels, and roadside installations.',
     bullets: [
       'Volume 1: General Maintenance',
       'Volume 2: Pavement Maintenance',
@@ -128,7 +128,7 @@ const SECTIONS = [
     chapter: 'Manual 7',
     title: 'PPP Feasibility Review Guideline',
     desc:
-      'A strategic document developed to advise the Government of Uganda on the efficient implementation of expressway projects through Public-Private Partnerships (PPPs).',
+      'This volume advises the Government of Uganda on implementing expressway projects through Public-Private Partnerships (PPPs). It addresses legal, institutional, technical, and financial considerations together with implementation strategy.',
     bullets: [
       'Introduction and Project Background',
       'Understanding Expressway PPPs',
@@ -143,7 +143,7 @@ const SECTIONS = [
     chapter: 'Manual 8',
     title: 'BMS User Manual',
     desc:
-      "An operational guidebook for a digital platform designed to systematically manage bridge data and support maintenance decision-making for Uganda's expressways. The purpose of this system is to ensure the structural safety of bridges and maximize maintenance efficiency by integrating data generated throughout the entire lifecycle of the structures.",
+      "This volume documents the Expressway Bridge Management System (BMS) used to record bridge data and inform maintenance decisions on Uganda's expressways. Integrated lifecycle data supports structural safety and more efficient maintenance planning.",
     bullets: [
       'General Overview and Access',
       'Bridge Information Management',

@@ -270,8 +270,8 @@ export default function FileViewerPage() {
   });
 
   const updateNoteMutation = useMutation({
-    mutationFn: async (input: { id: string; body: string; page?: number }) =>
-      updateNote(fileId, input.id, { body: input.body, ...(input.page != null ? { page: input.page } : {}) }),
+    mutationFn: async (input: { id: string; body: string; page: number }) =>
+      updateNote(fileId, input.id, { body: input.body, page: input.page }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["notes", fileId] });
     },
@@ -1287,7 +1287,7 @@ export default function FileViewerPage() {
                       updateNoteMutation.mutate({
                         id: note.id,
                         body,
-                        ...(page != null ? { page } : {}),
+                        page,
                       })
                     }
                     onDelete={() => deleteNoteMutation.mutate(note.id)}
@@ -1531,7 +1531,7 @@ function NoteComposerDialog({
 interface NoteRowProps {
   note: NoteItem;
   onJumpToPage: () => void;
-  onUpdate: (body: string, page?: number) => void;
+  onUpdate: (body: string, page: number) => void;
   onDelete: () => void;
 }
 
@@ -1570,7 +1570,7 @@ function NoteRow({ note, onJumpToPage, onUpdate, onDelete }: NoteRowProps) {
                     setEditing(false);
                     return;
                   }
-                  onUpdate(draft, pageChanged ? pageOk : undefined);
+                  onUpdate(draft, pageOk);
                   setEditing(false);
                 }}
                 className="rounded-md bg-slate-900 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-slate-700"
