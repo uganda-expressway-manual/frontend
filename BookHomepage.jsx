@@ -9,110 +9,185 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 
+/** Content aligned with 20260510_매뉴얼의 정의_PM.pptx (Integration Manual overview + eight volumes). */
 const SECTIONS = [
   {
     icon: '🗺️',
-    chapter: 'Chapter 1',
-    title: 'Planning',
+    chapter: 'Manual 1',
+    title: 'Planning Manual',
     desc:
-      "Strategic route planning, traffic demand forecasting, environmental impact assessments, and feasibility studies for Uganda's expressway network.",
+      'A practical work guideline for road planning and traffic demand related to expressway planning, road traffic capacity and service level, and economic feasibility analysis.',
     bullets: [
-      'Route Identification & Corridor Studies',
-      'Traffic Volume & Demand Forecasting',
-      'Environmental & Social Impact Assessment',
-      'Cost-Benefit & Feasibility Analysis',
-      'Stakeholder Engagement Procedures',
+      'Introduction and Scope',
+      'Road Planning and Traffic Demand',
+      'Highway Capacity and Level of Service (LOS)',
+      'Technical and Geometric Considerations',
+      'Economic Feasibility Analysis',
+      'Environmental and Social Considerations',
     ],
   },
   {
     icon: '📐',
-    chapter: 'Chapter 2',
-    title: 'Design',
+    chapter: 'Manual 2',
+    title: 'Design Manual',
     desc:
-      "Geometric design standards, structural engineering specifications, pavement design criteria, and drainage systems aligned with Uganda's climate and terrain.",
+      'This manual provides practical design guidance for expressway projects across technical, geometric, economic, and environmental requirements. It emphasizes safety, environmental protection, and efficient vehicle operation throughout the design process.',
     bullets: [
-      'Geometric & Alignment Standards',
-      'Pavement Structure & Materials',
-      'Bridges & Structural Design',
-      'Drainage & Hydraulic Design',
-      'Safety Infrastructure & Signage',
+      'Volume 1: Geometric Design',
+      'Volume 2: Earthwork & Drainage',
+      'Volume 3: Pavement Design',
+      'Volume 4: Bridge Design',
+      'Volume 5: Tunnel Design',
+      'Volume 6: Road and Auxiliary Facilities',
+      'Geotechnical Investigation Guidelines',
     ],
   },
   {
     icon: '🏗️',
-    chapter: 'Chapter 3',
-    title: 'Construction',
+    chapter: 'Manual 3',
+    title: 'Construction Management Manual',
     desc:
-      'Construction management procedures, quality control protocols, safety standards, and contractor oversight guidelines for expressway infrastructure delivery.',
+      'Provides detailed information and guidance on all aspects of expressway construction projects. This manual covers safety, environment, quality, cost, schedule and other management aspects, enabling construction managers to manage expressway construction projects effectively. It is a practical work guide to support construction management.',
     bullets: [
-      'Construction Planning & Supervision',
-      'Quality Control & Assurance',
-      'Materials Testing & Acceptance',
-      'Occupational Health & Safety',
-      'Environmental Compliance during Works',
+      {
+        title: 'Volume 1: Manual for Major Construction Work',
+        items: [
+          'Execution Management of Soft Ground',
+          'Execution Management of Slope Protection',
+        ],
+      },
+      {
+        title: 'Volume 2: General Provisions & Guideline for Supervision Consultant',
+        items: [
+          'General Provisions',
+          'Guideline for Supervision Consultant',
+        ],
+      },
+    ],
+  },
+  {
+    icon: '📋',
+    chapter: 'Manual 4',
+    title: 'Construction Specification',
+    desc:
+      'Comprehensive construction standards to be used for the construction of expressway civil engineering works and other similar unit works or the preparation of construction specifications, targeting all types of expressway construction works and consisting of civil works and auxiliary facilities.',
+    bullets: [
+      {
+        title: 'Volume 1: Series 1000 to 5000',
+        items: [
+          'Series 1000: General',
+          'Series 2000: Drainage & Earthworks',
+          'Series 3000: Subgrade & Subbase',
+          'Series 4000: Base Course',
+          'Series 5000: Pavement',
+        ],
+      },
+      {
+        title: 'Volume 2: Series 6000 to 14000',
+        items: [
+          'Series 6000: Structures',
+          'Series 7000–9000: Specialized Engineering',
+          'Series 11000–12000: Road Safety and Lighting',
+          'Series 13000: Landscaping and Environment',
+          'Series 14000: Survey and Documentation',
+        ],
+      },
     ],
   },
   {
     icon: '🚦',
-    chapter: 'Chapter 4',
-    title: 'Operation',
+    chapter: 'Manual 5',
+    title: 'Operation Manual',
     desc:
-      'Traffic management systems, tolling operations, incident response protocols, and intelligent transport system integration for smooth expressway operations.',
+      'A practical work guide that provides detailed information and guidance on all aspects of expressway operation, providing expressway operators with the tools and information they need to manage and maintain expressway operations effectively.',
     bullets: [
-      'Traffic Control & Management Systems',
-      'Tolling & Revenue Operations',
-      'Incident & Emergency Response',
-      'ITS & Communication Infrastructure',
-      'Performance Monitoring & Reporting',
+      'General Operation',
+      'Traffic Management',
+      'Accident and Disaster Management',
+      'Facility and Maintenance Management',
+      'Customer Service and Safety',
     ],
   },
   {
     icon: '🔧',
-    chapter: 'Chapter 5',
-    title: 'Maintenance',
+    chapter: 'Manual 6',
+    title: 'Maintenance Manual',
     desc:
-      'Routine and periodic maintenance frameworks, asset management systems, pavement rehabilitation strategies, and lifecycle cost management for long-term sustainability.',
+      'This manual summarizes guidelines and procedures for carrying out maintenance work such as facility maintenance, maintenance work, safety inspection, etc. of expressway facilities. It evaluates the condition of expressway facilities and performs necessary maintenance work. This is a practical work guide that identifies and supports safe and efficient expressway maintenance by providing standard procedures and guidelines.',
     bullets: [
-      'Routine & Periodic Maintenance Plans',
-      'Pavement Condition Monitoring',
-      'Bridge Inspection & Repair',
-      'Asset Management Systems',
-      'Lifecycle Cost Analysis & Planning',
+      'Volume 1: General Maintenance',
+      'Volume 2: Pavement Maintenance',
+      'Volume 3: Bridge Maintenance',
+      'Volume 4: Road Furniture Maintenance',
+      'Volume 5: Drainage & Slope Maintenance',
+      'Volume 6: Tunnel Maintenance',
+    ],
+  },
+  {
+    icon: '🤝',
+    chapter: 'Manual 7',
+    title: 'PPP Feasibility Review Guideline',
+    desc:
+      'A strategic document developed to advise the Government of Uganda on the efficient implementation of expressway projects through Public-Private Partnerships (PPPs).',
+    bullets: [
+      'Introduction and Project Background',
+      'Understanding Expressway PPPs',
+      'Legal and Institutional Framework Analysis',
+      'Technical and Financial Feasibility Review',
+      'International Benchmarking (Case Studies)',
+      'Strategy for Implementation',
+    ],
+  },
+  {
+    icon: '🌉',
+    chapter: 'Manual 8',
+    title: 'BMS User Manual',
+    desc:
+      "An operational guidebook for a digital platform designed to systematically manage bridge data and support maintenance decision-making for Uganda's expressways. The purpose of this system is to ensure the structural safety of bridges and maximize maintenance efficiency by integrating data generated throughout the entire lifecycle of the structures.",
+    bullets: [
+      'General Overview and Access',
+      'Bridge Information Management',
+      'Inspection Management',
+      'Bridge Condition and Analysis',
+      'Statistical and Reporting Tools',
     ],
   },
 ];
 
 const TOC_ENTRIES = [
-  { num: '1', name: 'Planning' },
-  { num: '2', name: 'Design' },
-  { num: '3', name: 'Construction' },
-  { num: '4', name: 'Operation' },
-  { num: '5', name: 'Maintenance' },
+  { num: '1', name: 'Expressway Planning Manual' },
+  { num: '2', name: 'Expressway Design Manual' },
+  { num: '3', name: 'Expressway Construction Management Manual' },
+  { num: '4', name: 'Expressway Construction Specification' },
+  { num: '5', name: 'Expressway Operation Manual' },
+  { num: '6', name: 'Expressway Maintenance Manual' },
+  { num: '7', name: 'Expressway PPP Feasibility Review Guideline' },
+  { num: '8', name: 'Expressway BMS User Manual' },
 ];
 
 // ─── Theme ───────────────────────────────────────────────────────────────────
 
 const C = {
-  navy:        '#1a2744',
-  gold:        '#c97c2a',
-  paper:       '#faf8f3',
+  navy: '#1a2744',
+  gold: '#c97c2a',
+  paper: '#faf8f3',
   paperBorder: '#d0c4aa',
-  paperDot:    '#d8cdb8',
-  textDark:    '#3a3020',
-  textMid:     '#6a5a40',
-  textMuted:   '#8a7a60',
-  spineLight:  '#e0d4bb',
+  paperDot: '#d8cdb8',
+  textDark: '#3a3020',
+  textMid: '#6a5a40',
+  textMuted: '#8a7a60',
+  spineLight: '#e0d4bb',
 };
 
-const fontSerif   = "'Source Serif 4', Georgia, serif";
+const fontSerif = "'Source Serif 4', Georgia, serif";
 const fontDisplay = "'Playfair Display', 'Times New Roman', serif";
 
 // ─── Timing constants ─────────────────────────────────────────────────────────
 
-const LAST_SPREAD = SECTIONS.length + 1; // 0=toc+welcome, 1–5=sections, 6=login
+const LAST_SPREAD = SECTIONS.length + 1; // 0=toc+welcome, 1–8=manuals, 9=login
 /** Open / close transitions: crossfade between one-page cover portrait and full spread — no hinge flips. */
-const OPEN_MS   = 560;
-const CLOSE_MS  = 780;
+const OPEN_MS = 560;
+const CLOSE_MS = 780;
 const CLOSE_HOME_MS = 780;
 const FLIP_MS = 880; // in-book page turns (desktop 3‑D overlay + mobile slide)
 
@@ -141,7 +216,7 @@ function TocLeftContent() {
         Table of Contents
       </div>
       <div style={{ fontFamily: fontSerif, fontSize: 12, color: C.textMuted, fontStyle: 'italic', marginBottom: 24 }}>
-        Five integrated manuals covering the full lifecycle
+        Eight integrated manuals covering the full lifecycle
       </div>
       {TOC_ENTRIES.map((e) => (
         <div key={e.num} style={styles.tocEntry}>
@@ -158,13 +233,15 @@ function WelcomeRightContent() {
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
       <div style={styles.pageHeader}>Welcome</div>
       <div style={{ fontFamily: fontDisplay, fontSize: 18, fontWeight: 700, color: C.navy, marginBottom: 10, lineHeight: 1.3 }}>
-        An interactive preview
+        What is the Expressway Integration Manual?
       </div>
       <div style={{ width: 32, height: 1.5, background: C.gold, marginBottom: 16 }} />
       <div style={{ fontFamily: fontSerif, fontSize: 13.5, color: C.textDark, lineHeight: 1.75, marginBottom: 20 }}>
-        This manual covers the complete lifecycle of Uganda's expressway infrastructure — from initial planning through
-        design, construction, operation, and long-term maintenance.<br /><br />
-        Browse the sections to explore each part of the manual. Log in to access the full content.
+        The Expressway Integration Manual is a comprehensive reference for managing the full expressway lifecycle—planning,
+        design, construction management, operation, and maintenance.<br /><br />
+        It provides sector managers with an integrated framework for planning and overseeing expressway programs.
+        The manual supports consistent, systematic delivery from initial planning through long-term maintenance.<br /><br />
+        Browse the sections to explore each volume. Log in to access the full content.
       </div>
       <div style={{ padding: 14, background: 'rgba(201,124,42,0.07)', borderLeft: `2px solid ${C.gold}`, borderRadius: '0 4px 4px 0' }}>
         <div style={{ fontFamily: fontSerif, fontSize: 12, color: '#7a5a20', lineHeight: 1.6 }}>
@@ -201,12 +278,30 @@ function SectionRightContent({ section }) {
       <div style={{ fontFamily: fontDisplay, fontSize: 14, color: C.textMuted, marginBottom: 14, fontStyle: 'italic' }}>
         Covered in this section:
       </div>
-      <ul style={{ listStyle: 'none', padding: 0 }}>
-        {section.bullets.map((b) => (
-          <li key={b} style={{ fontFamily: fontSerif, fontSize: 12.5, color: '#5a4a30', padding: '6px 0', borderBottom: `0.5px dotted ${C.paperDot}`, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ color: C.gold, flexShrink: 0 }}>—</span>{b}
-          </li>
-        ))}
+      <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+        {section.bullets.map((entry) => {
+          if (typeof entry === 'string') {
+            return (
+              <li key={entry} style={styles.bulletRow}>
+                <span style={{ color: C.gold, flexShrink: 0 }}>—</span>{entry}
+              </li>
+            );
+          }
+          return (
+            <li key={entry.title} style={{ borderBottom: `0.5px dotted ${C.paperDot}` }}>
+              <div style={{ ...styles.bulletRow, borderBottom: 'none', fontWeight: 600, color: C.navy }}>
+                <span style={{ color: C.gold, flexShrink: 0 }}>—</span>{entry.title}
+              </div>
+              <ul style={{ listStyle: 'none', padding: '0 0 4px 18px', margin: 0 }}>
+                {entry.items.map((item) => (
+                  <li key={item} style={{ ...styles.bulletRow, fontSize: 11.5, padding: '4px 0' }}>
+                    <span style={{ color: C.textMuted, flexShrink: 0 }}>·</span>{item}
+                  </li>
+                ))}
+              </ul>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
@@ -214,9 +309,9 @@ function SectionRightContent({ section }) {
 
 function LoginLeftContent({ onLoginClick }) {
   return (
-       /* height:'100%' + minHeight:0 + boxSizing ensure this container fills the
-       pageInner flex column fully, so justify-content:center is computed relative
-       to the full page height — not just the content height. */
+    /* height:'100%' + minHeight:0 + boxSizing ensure this container fills the
+    pageInner flex column fully, so justify-content:center is computed relative
+    to the full page height — not just the content height. */
     <div style={{
       flex: 1, display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center',
@@ -226,7 +321,7 @@ function LoginLeftContent({ onLoginClick }) {
       <div style={{ fontSize: 36, marginBottom: 14, opacity: 0.6 }}>🔐</div>
       <div style={{ fontFamily: fontDisplay, fontSize: 18, fontWeight: 700, color: C.navy, marginBottom: 8 }}>Ready to dive deeper?</div>
       <div style={{ fontFamily: fontSerif, fontSize: 13, color: C.textMid, lineHeight: 1.6, marginBottom: 20 }}>
-        You've seen the full structure of the Uganda Expressway Integrated Manual.
+        You&apos;ve seen the full structure of the Uganda Expressway Integration Manual and its eight volumes.
         Log in to access the complete reference documentation, detailed specifications, and all annexes.
       </div>
       <button
@@ -275,6 +370,10 @@ const styles = {
     color: C.textMuted, paddingBottom: 10, borderBottom: `0.5px solid ${C.paperBorder}`, marginBottom: 24,
   },
   tocEntry: { display: 'flex', alignItems: 'flex-start', padding: '10px 0', borderBottom: `0.5px solid #e8e0d0`, gap: 14 },
+  bulletRow: {
+    fontFamily: fontSerif, fontSize: 12.5, color: '#5a4a30', padding: '6px 0',
+    borderBottom: `0.5px dotted ${C.paperDot}`, display: 'flex', alignItems: 'flex-start', gap: 8,
+  },
   page: {
     flex: 1,
     minWidth: 0,
@@ -320,16 +419,16 @@ function getSpreadContent(spread, side, onLoginClick) {
 
 function getMobilePage(pageIndex, onLoginClick) {
   const spread = Math.floor(pageIndex / 2);
-  const side   = pageIndex % 2 === 0 ? 'left' : 'right';
+  const side = pageIndex % 2 === 0 ? 'left' : 'right';
   return getSpreadContent(spread, side, onLoginClick);
 }
 
 // ─── BookCover (static, closed state) ────────────────────────────────────────
 
 function BookCover({ onClick, tiltEnabled = true }) {
-  const innerRef      = useRef(null);
-  const hoverTimer    = useRef(null);
-  const [showHint, setShowHint]   = useState(false);
+  const innerRef = useRef(null);
+  const hoverTimer = useRef(null);
+  const [showHint, setShowHint] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
   const onMouseMove = useCallback((e) => {
@@ -337,8 +436,8 @@ function BookCover({ onClick, tiltEnabled = true }) {
     const el = innerRef.current;
     if (!el) return;
     const { left, top, width, height } = el.getBoundingClientRect();
-    const dx = (e.clientX - left - width / 2)  / (width  / 2);
-    const dy = (e.clientY - top  - height / 2) / (height / 2);
+    const dx = (e.clientX - left - width / 2) / (width / 2);
+    const dy = (e.clientY - top - height / 2) / (height / 2);
     el.style.transform = `rotateY(${dx * 8}deg) rotateX(${-dy * 5}deg)`;
   }, [tiltEnabled]);
 
@@ -519,8 +618,10 @@ function BookOpeningAnimation({ onDone }) {
       }}>
         <img src="/logo/bookcover.png" alt="" aria-hidden
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }} />
-        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
-          background: 'linear-gradient(to left, rgba(0,0,0,0.12) 0%, transparent 38%)' }} />
+        <div style={{
+          position: 'absolute', inset: 0, pointerEvents: 'none',
+          background: 'linear-gradient(to left, rgba(0,0,0,0.12) 0%, transparent 38%)'
+        }} />
       </div>
     </div>
   );
@@ -650,10 +751,12 @@ function PageFlipOverlay({ direction, fromSpread, toSpread, onLoginClick }) {
         <div style={{ ...styles.pageInner, flex: 1, minHeight: 0 }}>
           {getSpreadContent(fromSpread, isForward ? 'right' : 'left', onLoginClick)}
         </div>
-        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
+        <div style={{
+          position: 'absolute', inset: 0, pointerEvents: 'none',
           background: isForward
             ? 'linear-gradient(to left,  rgba(0,0,0,0.20) 0%, transparent 26%)'
-            : 'linear-gradient(to right, rgba(0,0,0,0.20) 0%, transparent 26%)' }} />
+            : 'linear-gradient(to right, rgba(0,0,0,0.20) 0%, transparent 26%)'
+        }} />
       </div>
 
       <div style={{
@@ -668,10 +771,12 @@ function PageFlipOverlay({ direction, fromSpread, toSpread, onLoginClick }) {
         <div style={{ ...styles.pageInner, flex: 1, minHeight: 0 }}>
           {getSpreadContent(toSpread, isForward ? 'left' : 'right', onLoginClick)}
         </div>
-        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
+        <div style={{
+          position: 'absolute', inset: 0, pointerEvents: 'none',
           background: isForward
             ? 'linear-gradient(to right, rgba(0,0,0,0.09) 0%, transparent 30%)'
-            : 'linear-gradient(to left,  rgba(0,0,0,0.09) 0%, transparent 30%)' }} />
+            : 'linear-gradient(to left,  rgba(0,0,0,0.09) 0%, transparent 30%)'
+        }} />
       </div>
     </div>
   );
@@ -713,11 +818,11 @@ function OpenBook({
 }) {
   const [hoverSide, setHoverSide] = useState(null);
 
-  const canGoForward  = isMobile ? mobilePageIndex < (LAST_SPREAD + 1) * 2 - 1 : spread < LAST_SPREAD;
+  const canGoForward = isMobile ? mobilePageIndex < (LAST_SPREAD + 1) * 2 - 1 : spread < LAST_SPREAD;
   const canGoBackward = isMobile ? mobilePageIndex > 0 : spread > 0;
   const isFirstSpread = isMobile ? mobilePageIndex === 0 : spread === 0;
 
-  const leftCursor  = (isFirstSpread || canGoBackward) ? 'w-resize' : 'default';
+  const leftCursor = (isFirstSpread || canGoBackward) ? 'w-resize' : 'default';
   const rightCursor = canGoForward ? 'e-resize' : 'default';
 
   /* ── Mobile layout ── */
@@ -758,7 +863,7 @@ function OpenBook({
   }
 
   /* ── Desktop layout ── */
-  const leftDisplaySpread  = (isFlipping && flipDirection === 'forward')  ? flipFromSpread : spread;
+  const leftDisplaySpread = (isFlipping && flipDirection === 'forward') ? flipFromSpread : spread;
   const rightDisplaySpread = (isFlipping && flipDirection === 'backward') ? flipFromSpread : spread;
 
   return (
@@ -828,13 +933,13 @@ function OpenBook({
  */
 export default function BookHomepage({ onLoginClick }) {
   // 'CLOSED' | 'OPENING' | 'OPEN' | 'FLIPPING_FWD' | 'FLIPPING_BWD' | 'CLOSING'
-  const [phase,           setPhase]           = useState('CLOSED');
-  const [spread,          setSpread]          = useState(0);
-  const [flipFromSpread,  setFlipFromSpread]  = useState(0);
+  const [phase, setPhase] = useState('CLOSED');
+  const [spread, setSpread] = useState(0);
+  const [flipFromSpread, setFlipFromSpread] = useState(0);
   const [mobilePageIndex, setMobilePageIndex] = useState(0);
-  const [mobileFlipFrom,  setMobileFlipFrom]  = useState(0);
-  const [isMobile,        setIsMobile]        = useState(false);
-  const [isTouchLike,     setIsTouchLike]     = useState(false);
+  const [mobileFlipFrom, setMobileFlipFrom] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
+  const [isTouchLike, setIsTouchLike] = useState(false);
 
   const handleLogin = onLoginClick ?? (() => { window.location.href = '/login'; });
 
@@ -920,8 +1025,8 @@ export default function BookHomepage({ onLoginClick }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [phase, goNext, goPrevOrClose, closeBook]);
 
-  const isFlipping  = phase === 'FLIPPING_FWD' || phase === 'FLIPPING_BWD';
-  const flipDir     = phase === 'FLIPPING_FWD' ? 'forward' : phase === 'FLIPPING_BWD' ? 'backward' : null;
+  const isFlipping = phase === 'FLIPPING_FWD' || phase === 'FLIPPING_BWD';
+  const flipDir = phase === 'FLIPPING_FWD' ? 'forward' : phase === 'FLIPPING_BWD' ? 'backward' : null;
   const isAnimating = phase === 'OPENING' || phase === 'CLOSING' || isFlipping;
 
   /* ── Body scroll lock: prevent scrollbar flash during every animation phase ── */
@@ -931,21 +1036,21 @@ export default function BookHomepage({ onLoginClick }) {
       const scrollY = window.scrollY;
       document.body.style.overflow = 'hidden';
       document.body.style.position = 'fixed';
-      document.body.style.top      = `-${scrollY}px`;
-      document.body.style.width    = '100%';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
     } else {
       const savedTop = document.body.style.top;
-      document.body.style.overflow  = '';
-      document.body.style.position  = '';
-      document.body.style.top       = '';
-      document.body.style.width     = '';
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
       if (savedTop) window.scrollTo(0, parseInt(savedTop, 10) * -1);
     }
     return () => {
-      document.body.style.overflow  = '';
-      document.body.style.position  = '';
-      document.body.style.top       = '';
-      document.body.style.width     = '';
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
     };
   }, [isAnimating]);
 
@@ -959,22 +1064,22 @@ export default function BookHomepage({ onLoginClick }) {
       <main
         data-imme-manual-book
         style={{
-        ...BOOK_LAYOUT_VARS,
-        flex: '1 1 auto',
-        minHeight: 'calc(100dvh - 72px)',
-        width: '100%',
-        display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-        padding: 0, background: '#f4f1ec',
-        position: 'relative',
-        overflowX: 'visible',
-        userSelect: 'none',
-        WebkitUserSelect: 'none',
-        MozUserSelect: 'none',
-        msUserSelect: 'none',
-        WebkitTouchCallout: 'none',
-        WebkitTapHighlightColor: 'transparent',
-      }}>
+          ...BOOK_LAYOUT_VARS,
+          flex: '1 1 auto',
+          minHeight: 'calc(100dvh - 72px)',
+          width: '100%',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          padding: 0, background: '#f4f1ec',
+          position: 'relative',
+          overflowX: 'visible',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          MozUserSelect: 'none',
+          msUserSelect: 'none',
+          WebkitTouchCallout: 'none',
+          WebkitTapHighlightColor: 'transparent',
+        }}>
         <h1 style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>
           Uganda Expressway Integrated Manual — interactive book preview
         </h1>

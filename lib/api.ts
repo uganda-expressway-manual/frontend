@@ -588,80 +588,63 @@ export async function patchFileOrder(folderId: string, fileIds: string[]): Promi
 }
 
 /**
- * Page notes — `GET|POST|PATCH|DELETE` under `/files/:fileId/notes` (Express, no `/api` prefix).
+ * Page notes — `GET|POST|PATCH|DELETE` under `/notes/:fileId` (Express, no `/api` prefix).
  *
  * - Auth: cookie session via axios `withCredentials: true` (Bearer may also be attached by interceptor).
- * - Wire JSON uses **0-based** `page`; this module maps `NoteItem.page` as **1-based** for the PDF viewer.
- * - List: `GET /files/{id}/notes` → array. One: `GET /files/{id}/notes/{noteId}`.
- * - Create: `POST /files/{id}/notes` body `{ page, body }` → 201 + note.
- * - Update: `PATCH` with at least one of `page` | `body` → **204 empty body** (no JSON).
- * - Delete: `DELETE` → 204. Missing note: `{ message: "Page note not found." }` (404).
+ * - Wire JSON uses **1-based** `page` (same as the PDF viewer).
+ * - List: `GET /notes/{fileId}` → array. One: `GET /notes/{fileId}/{noteId}`.
+ * - Create: `POST /notes/{fileId}` body `{ page, body }` → 201 + note.
+ * - Update: `PATCH /notes/{fileId}/{noteId}` with at least one of `page` | `body`.
+ * - Delete: `DELETE /notes/{fileId}/{noteId}`.
  */
-export interface PageNoteView {
-  id: string;
-  fileId: string;
-  page: number;
-  body: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-function mapPageNoteFromApi(row: PageNoteView): NoteItem {
-  return {
-    ...row,
-    page: row.page + 1,
-  };
+function notesPath(fileId: string, noteId?: string): string {
+  const base = `/notes/${encodeURIComponent(fileId)}`;
+  return noteId ? `${base}/${encodeURIComponent(noteId)}` : base;
 }
 
 export async function getNotes(fileId: string): Promise<NoteItem[]> {
-  const { data } = await api.get<PageNoteView[]>(`/files/${encodeURIComponent(fileId)}/notes`);
-  return data.map(mapPageNoteFromApi);
+  const { data } = await api.get<NoteItem[]>(notesPath(fileId));
+  return data;
 }
 
 /** Single note (e.g. after a refetch by id). */
 export async function getPageNote(fileId: string, noteId: string): Promise<NoteItem> {
-  const { data } = await api.get<PageNoteView>(
-    `/files/${encodeURIComponent(fileId)}/notes/${encodeURIComponent(noteId)}`
-  );
-  return mapPageNoteFromApi(data);
+  const { data } = await api.get<NoteItem>(notesPath(fileId, noteId));
+  return data;
 }
 
 export interface CreateNotePayload {
   fileId: string;
-  /** 1-based PDF page in the UI (sent to API as 0-based). */
+  /** 1-based PDF page in the UI. */
   page: number;
   body: string;
 }
 
 export async function createNote(payload: CreateNotePayload): Promise<NoteItem> {
-  const { data } = await api.post<PageNoteView>(
-    `/files/${encodeURIComponent(payload.fileId)}/notes`,
-    { page: payload.page - 1, body: payload.body }
+  const { data } = await api.post<NoteItem>(
+    notesPath(payload.fileId),
+    { page: payload.page, body: payload.body }
   );
-  return mapPageNoteFromApi(data);
+  return data;
 }
 
 /**
- * Partial update. Server responds with **204 No Content** (no JSON body).
- * UI should refetch notes or merge locally after success.
+ * Partial update (`PATCH`). Refetch notes or merge locally after success if the server returns 204.
  */
 export async function updateNote(
   fileId: string,
   noteId: string,
-  input: { body?: string; /** 1-based */ page?: number }
+  input: { body?: string; page?: number }
 ): Promise<void> {
   const patchBody: { body?: string; page?: number } = {};
   if (input.body !== undefined) patchBody.body = input.body;
-  if (input.page !== undefined) patchBody.page = input.page - 1;
+  if (input.page !== undefined) patchBody.page = input.page;
   if (Object.keys(patchBody).length === 0) {
     throw new Error("updateNote: provide at least one of page or body");
   }
-  await api.patch(
-    `/files/${encodeURIComponent(fileId)}/notes/${encodeURIComponent(noteId)}`,
-    patchBody
-  );
+  await api.patch(notesPath(fileId, noteId), patchBody);
 }
 
 export async function deleteNote(fileId: string, noteId: string): Promise<void> {
-  await api.delete(`/files/${encodeURIComponent(fileId)}/notes/${encodeURIComponent(noteId)}`);
+  await api.delete(notesPath(fileId, noteId));
 }

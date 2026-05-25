@@ -122,11 +122,11 @@ export interface HighlightItem {
   updatedAt: string;
 }
 
-/** Backend `PageNote` row. Wire JSON uses 0-based `page`; `lib/api` maps to 1-based `NoteItem.page` for the viewer. PATCH update returns 204 (no body) — refetch notes after updates. */
+/** Backend page note row (`GET|POST /notes/:fileId`, `GET|PATCH|DELETE /notes/:fileId/:noteId`). `page` is 1-based. */
 export interface NoteItem {
   id: string;
   fileId: string;
-  /** 1-based page index in the reader UI (API uses 0-based). */
+  /** 1-based page index in the reader UI. */
   page: number;
   body: string;
   createdAt: string;
