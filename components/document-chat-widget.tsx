@@ -1,12 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { ReactNode } from "react";
+import { type CSSProperties, ReactNode } from "react";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
-import { api } from "@/lib/api";
+import {
+  createChat,
+  deleteChat,
+  getChatHistory,
+  getChatbotAvailableModels,
+  listChats,
+  patchChatMessage,
+  postChatbotMessage,
+  updateChat,
+  type ChatModelOption,
+} from "@/lib/api";
+import type { ChatHistoryMessage, ChatRoomSummary } from "@/lib/types";
 import { rehypeAppendStreamCursor } from "@/lib/rehype-append-stream-cursor";
 
 /* ── Design tokens ── */
@@ -35,24 +46,6 @@ interface ChatReferenceLink {
   href: string;
 }
 
-interface ChatModelOption {
-  id: string;
-  label: string;
-}
-
-const CHATBOT_REQUEST_URLS = {
-  library: "/chatbot/chat",
-  folder: "/chatbot/chat",
-  reader: "/chatbot/chat",
-} as const;
-
-type ChatRequestContext = keyof typeof CHATBOT_REQUEST_URLS;
-
-function resolveChatRequestContext(folderId: string, layout: "default" | "reader"): ChatRequestContext {
-  if (layout === "reader") return "reader";
-  return folderId ? "folder" : "library";
-}
-
 interface DocumentChatWidgetProps {
   folderId?: string;
   stackZClass?: string;
@@ -62,7 +55,7 @@ interface DocumentChatWidgetProps {
   contextLabel?: string;
 }
 
-const CHAT_MODEL_OPTIONS: readonly ChatModelOption[] = [
+const FALLBACK_CHAT_MODEL_OPTIONS: readonly ChatModelOption[] = [
   { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
   { id: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite" },
 ];
@@ -101,7 +94,12 @@ export function DocumentChatWidget({
   layout = "default",
   contextLabel,
 }: DocumentChatWidgetProps) {
+  const queryClient = useQueryClient();
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [chatContextMenuId, setChatContextMenuId] = useState<string | null>(null);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [activeChatTitle, setActiveChatTitle] = useState("");
   const [chatInput, setChatInput] = useState("");
   const [selectedModelId, setSelectedModelId] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => [{
@@ -120,9 +118,119 @@ export function DocumentChatWidget({
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const modelMenuRef = useRef<HTMLDivElement | null>(null);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [createTitleInput, setCreateTitleInput] = useState("");
+  const [renameTarget, setRenameTarget] = useState<ChatRoomSummary | null>(null);
+  const [renameTitleInput, setRenameTitleInput] = useState("");
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingMessageText, setEditingMessageText] = useState("");
 
-  const chatRequestContext = resolveChatRequestContext(folderId, layout);
-  const chatRequestUrl = CHATBOT_REQUEST_URLS[chatRequestContext];
+  const modelsQuery = useQuery({
+    queryKey: ["chatbot", "available_models"],
+    queryFn: getChatbotAvailableModels,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const chatsQuery = useQuery({
+    queryKey: ["chats"],
+    queryFn: listChats,
+    enabled: isChatOpen,
+  });
+
+  const chatHistoryQuery = useQuery({
+    queryKey: ["chat", activeChatId, "history"],
+    queryFn: () => getChatHistory(activeChatId!),
+    enabled: isChatOpen && Boolean(activeChatId),
+  });
+
+  const chatModelOptions: readonly ChatModelOption[] =
+    modelsQuery.data && modelsQuery.data.length > 0
+      ? modelsQuery.data
+      : FALLBACK_CHAT_MODEL_OPTIONS;
+
+  const chats = chatsQuery.data ?? [];
+  const isHistoryLoading = Boolean(activeChatId) && chatHistoryQuery.isLoading;
+
+  const resetToNewChat = useCallback(() => {
+    setActiveChatId(null);
+    setActiveChatTitle("");
+    setAssistantTyping(null);
+    setChatMessages([{
+      id: "assistant-greeting",
+      role: "assistant",
+      text: buildInitialGreeting(folderId, contextLabel),
+    }]);
+  }, [folderId, contextLabel]);
+
+  const openConversation = useCallback((chat: ChatRoomSummary) => {
+    setActiveChatId(chat.id);
+    setActiveChatTitle(chat.title);
+    setAssistantTyping(null);
+    setIsSidebarOpen(false);
+    setChatContextMenuId(null);
+  }, []);
+
+  useEffect(() => {
+    if (!activeChatId) {
+      return;
+    }
+    if (chatHistoryQuery.isLoading || !chatHistoryQuery.isSuccess || !chatHistoryQuery.data) {
+      return;
+    }
+    setActiveChatTitle(chatHistoryQuery.data.title);
+    setChatMessages(historyToChatMessages(chatHistoryQuery.data.messages, folderId, contextLabel));
+  }, [
+    activeChatId,
+    chatHistoryQuery.data,
+    chatHistoryQuery.isLoading,
+    chatHistoryQuery.isSuccess,
+    folderId,
+    contextLabel,
+  ]);
+
+  const refreshChatList = useCallback(async () => {
+    await queryClient.refetchQueries({ queryKey: ["chats"] });
+  }, [queryClient]);
+
+  const createChatMutation = useMutation({
+    mutationFn: (title: string) => createChat(title),
+    onSuccess: async (chat) => {
+      setIsCreateModalOpen(false);
+      setCreateTitleInput("");
+      await refreshChatList();
+      setIsSidebarOpen(false);
+      openConversation(chat);
+      setChatMessages([{
+        id: "assistant-greeting",
+        role: "assistant",
+        text: buildInitialGreeting(folderId, contextLabel),
+      }]);
+    },
+  });
+
+  const updateChatMutation = useMutation({
+    mutationFn: ({ chatId, title }: { chatId: string; title: string }) => updateChat(chatId, { title }),
+    onSuccess: async (chat) => {
+      if (activeChatId === chat.id) {
+        setActiveChatTitle(chat.title);
+      }
+      setRenameTarget(null);
+      setRenameTitleInput("");
+      await refreshChatList();
+      void queryClient.invalidateQueries({ queryKey: ["chat", chat.id, "history"] });
+    },
+  });
+
+  const deleteChatMutation = useMutation({
+    mutationFn: (chatId: string) => deleteChat(chatId),
+    onSuccess: async (_data, chatId) => {
+      setChatContextMenuId(null);
+      if (activeChatId === chatId) {
+        resetToNewChat();
+      }
+      await refreshChatList();
+    },
+  });
 
   /* ── Animate panel open/close ── */
   useEffect(() => {
@@ -134,8 +242,30 @@ export function DocumentChatWidget({
   }, [isChatOpen]);
 
   useEffect(() => {
-    if (!isChatOpen) setIsModelMenuOpen(false);
+    if (!isChatOpen) {
+      setIsModelMenuOpen(false);
+      setIsSidebarOpen(false);
+      setChatContextMenuId(null);
+    }
   }, [isChatOpen]);
+
+  useEffect(() => {
+    if (!isSidebarOpen && !chatContextMenuId) return;
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (
+        target.closest("[data-chat-sidebar]") ||
+        target.closest("[data-chat-context-menu]") ||
+        target.closest("[data-chat-chrome]")
+      ) {
+        return;
+      }
+      setChatContextMenuId(null);
+      if (isSidebarOpen) setIsSidebarOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [isSidebarOpen, chatContextMenuId]);
 
   useEffect(() => {
     if (!isModelMenuOpen) return;
@@ -198,10 +328,10 @@ export function DocumentChatWidget({
   /* ── Model init ── */
   useEffect(() => {
     setSelectedModelId(c => {
-      if (c && CHAT_MODEL_OPTIONS.some(m => m.id === c)) return c;
-      return CHAT_MODEL_OPTIONS[0]?.id ?? "";
+      if (c && chatModelOptions.some(m => m.id === c)) return c;
+      return chatModelOptions[0]?.id ?? "";
     });
-  }, []);
+  }, [chatModelOptions]);
 
   /* ── Auto-scroll ── */
   useEffect(() => {
@@ -247,15 +377,79 @@ export function DocumentChatWidget({
     el.style.height = `${Math.min(el.scrollHeight, 80)}px`;
   }, [chatInput]);
 
-  const chatMutation = useMutation({
-    mutationFn: async ({ message, requestId, model }: { message: string; requestId: number; model: string }) => {
-      const body = model ? { folderId, model, message } : { folderId, message };
-      const response = await api.post(chatRequestUrl, body);
-      return { ...resolveChatbotResponse(response.data), requestId };
+  const editMessageMutation = useMutation({
+    mutationFn: ({
+      chatId,
+      messageId,
+      text,
+    }: {
+      chatId: string;
+      messageId: string;
+      text: string;
+    }) => patchChatMessage(chatId, messageId, text),
+    onSuccess: (_data, variables) => {
+      setChatMessages((prev) =>
+        prev.map((m) =>
+          m.id === variables.messageId ? { ...m, text: variables.text } : m,
+        ),
+      );
+      setEditingMessageId(null);
+      setEditingMessageText("");
+      void queryClient.invalidateQueries({ queryKey: ["chat", variables.chatId, "history"] });
     },
-    onSuccess: ({ answer, referencedPages, requestId }) => {
+  });
+
+  const chatMutation = useMutation({
+    mutationFn: async ({
+      text,
+      requestId,
+      titleHint,
+      chatId: existingChatId,
+      pendingUserMessageId,
+    }: {
+      text: string;
+      requestId: number;
+      titleHint: string;
+      chatId: string | null;
+      pendingUserMessageId: string;
+    }) => {
+      let chatId = existingChatId;
+      if (!chatId) {
+        const created = await createChat(titleHint.slice(0, 80) || "New conversation");
+        chatId = created.id;
+        setActiveChatId(created.id);
+        setActiveChatTitle(created.title);
+        void queryClient.invalidateQueries({ queryKey: ["chats"] });
+      }
+      const data = await postChatbotMessage({ chatId, text });
+      return {
+        ...resolveChatbotResponse(data),
+        requestId,
+        chatId,
+        pendingUserMessageId,
+        serverUserMessageId: pickUserMessageIdFromResponse(data),
+      };
+    },
+    onSuccess: ({
+      answer,
+      referencedPages,
+      requestId,
+      chatId,
+      pendingUserMessageId,
+      serverUserMessageId,
+    }) => {
       if (blockedRequestIdsRef.current.has(requestId)) {
         blockedRequestIdsRef.current.delete(requestId); return;
+      }
+      if (chatId) {
+        void queryClient.invalidateQueries({ queryKey: ["chats"] });
+      }
+      if (serverUserMessageId) {
+        setChatMessages((prev) =>
+          prev.map((m) =>
+            m.id === pendingUserMessageId ? { ...m, id: serverUserMessageId } : m,
+          ),
+        );
       }
       const assistantMessageId = `${Date.now()}-assistant`;
       const resolvedText = answer || "I couldn't generate a response. Please try again.";
@@ -275,20 +469,78 @@ export function DocumentChatWidget({
   const submitChatMessage = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmedMessage = chatInput.trim();
-    const modelRequired = CHAT_MODEL_OPTIONS.length > 0;
-    if (
-      !trimmedMessage ||
-      chatMutation.isPending ||
-      assistantTyping ||
-      (modelRequired && !selectedModelId)
-    ) {
+    if (!trimmedMessage || chatMutation.isPending || assistantTyping) {
       return;
     }
     const requestId = requestSequenceRef.current + 1;
     requestSequenceRef.current = requestId;
-    setChatMessages(prev => [...prev, { id: `${Date.now()}-user`, role: "user", text: trimmedMessage }]);
+    const pendingUserMessageId = `pending-user-${Date.now()}`;
+    setChatMessages((prev) => [
+      ...prev,
+      { id: pendingUserMessageId, role: "user", text: trimmedMessage },
+    ]);
     setChatInput("");
-    chatMutation.mutate({ message: trimmedMessage, requestId, model: selectedModelId });
+    chatMutation.mutate({
+      text: trimmedMessage,
+      requestId,
+      titleHint: trimmedMessage,
+      chatId: activeChatId,
+      pendingUserMessageId,
+    });
+  };
+
+  const startEditingMessage = (message: ChatMessage) => {
+    if (!activeChatId || !isEditableUserMessage(message.id)) return;
+    setEditingMessageId(message.id);
+    setEditingMessageText(message.text);
+  };
+
+  const cancelEditingMessage = () => {
+    setEditingMessageId(null);
+    setEditingMessageText("");
+  };
+
+  const saveEditedMessage = () => {
+    if (!activeChatId || !editingMessageId) return;
+    const trimmed = editingMessageText.trim();
+    if (!trimmed || editMessageMutation.isPending) return;
+    editMessageMutation.mutate({
+      chatId: activeChatId,
+      messageId: editingMessageId,
+      text: trimmed,
+    });
+  };
+
+  const handleNewChat = () => {
+    setCreateTitleInput("");
+    setIsCreateModalOpen(true);
+  };
+
+  const handleCreateChatSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmed = createTitleInput.trim();
+    if (!trimmed || createChatMutation.isPending) return;
+    createChatMutation.mutate(trimmed);
+  };
+
+  const openRenameModal = (chat: ChatRoomSummary) => {
+    setChatContextMenuId(null);
+    setRenameTarget(chat);
+    setRenameTitleInput(chat.title);
+  };
+
+  const handleRenameChatSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!renameTarget) return;
+    const trimmed = renameTitleInput.trim();
+    if (!trimmed || updateChatMutation.isPending) return;
+    updateChatMutation.mutate({ chatId: renameTarget.id, title: trimmed });
+  };
+
+  const handleDeleteChatInList = (chat: ChatRoomSummary) => {
+    setChatContextMenuId(null);
+    if (!window.confirm(`Delete "${chat.title}"?`)) return;
+    deleteChatMutation.mutate(chat.id);
   };
 
   const stopConversation = () => {
@@ -299,8 +551,13 @@ export function DocumentChatWidget({
   const isConversationRunning = chatMutation.isPending || Boolean(assistantTyping);
   const inputEmpty = !chatInput.trim();
   const selectedModelLabel =
-    CHAT_MODEL_OPTIONS.find((m) => m.id === selectedModelId)?.label ?? CHAT_MODEL_OPTIONS[0]?.label ?? "";
+    chatModelOptions.find((m) => m.id === selectedModelId)?.label ?? chatModelOptions[0]?.label ?? "";
   const modelPickerDisabled = chatMutation.isPending || Boolean(assistantTyping);
+  const showEmptyState =
+    !isHistoryLoading &&
+    chatMessages.length === 1 &&
+    chatMessages[0]?.id === "assistant-greeting" &&
+    !chatMutation.isPending;
 
   /* ══════════════════════════════════════════════════════
      RENDER — Reference Librarian aesthetic
@@ -378,24 +635,47 @@ export function DocumentChatWidget({
           }}
           className={stackZClass}
         >
-          {/* Header */}
-          <div style={{
-            background: C.navy,
-            padding: "14px 18px 16px",
-            borderRadius: "6px 6px 0 0",
-            flexShrink: 0,
-          }}>
+          {/* Header — Reference Librarian + Gemini chrome */}
+          <div
+            data-chat-chrome
+            style={{
+              background: C.navy,
+              padding: "14px 18px 16px",
+              borderRadius: "6px 6px 0 0",
+              flexShrink: 0,
+            }}
+          >
             <div style={{
               display: "flex", alignItems: "flex-start", gap: 10,
               marginBottom: 10,
             }}>
+              <button
+                type="button"
+                onClick={() => setIsSidebarOpen((open) => !open)}
+                aria-label={isSidebarOpen ? "Close menu" : "Open chats menu"}
+                aria-expanded={isSidebarOpen}
+                style={{
+                  background: isSidebarOpen ? "rgba(255,255,255,0.12)" : "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: "4px 2px",
+                  borderRadius: 4,
+                  display: "flex",
+                  alignItems: "center",
+                  flexShrink: 0,
+                  marginTop: 2,
+                }}
+              >
+                <MenuIcon color="rgba(255,255,255,0.85)" />
+              </button>
               <BookIcon size={20} color={C.gold} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{
                   fontFamily: fontSerif, fontSize: 15, fontWeight: 700,
                   color: "white", lineHeight: 1.2,
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 }}>
-                  AI Assistant
+                  {activeChatTitle || "AI Assistant"}
                 </div>
                 <div style={{
                   fontFamily: fontBody, fontSize: 11, fontStyle: "italic",
@@ -405,6 +685,7 @@ export function DocumentChatWidget({
                 </div>
               </div>
               <button
+                type="button"
                 onClick={closeChat}
                 aria-label="Close chat"
                 style={{
@@ -423,7 +704,6 @@ export function DocumentChatWidget({
                 ×
               </button>
             </div>
-            {/* Model picker */}
             <div ref={modelMenuRef} style={{ position: "relative" }}>
               <button
                 type="button"
@@ -448,29 +728,13 @@ export function DocumentChatWidget({
                   borderRadius: 3,
                   cursor: modelPickerDisabled ? "not-allowed" : "pointer",
                   opacity: modelPickerDisabled ? 0.55 : 1,
-                  transition: "border-color 150ms, box-shadow 150ms",
                   textAlign: "left",
                 }}
               >
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {selectedModelLabel}
                 </span>
-                <svg
-                  width={12}
-                  height={12}
-                  viewBox="0 0 20 20"
-                  fill="none"
-                  stroke={C.navy}
-                  strokeWidth={2}
-                  aria-hidden
-                  style={{
-                    transform: isModelMenuOpen ? "rotate(180deg)" : "none",
-                    transition: "transform 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94)",
-                    flexShrink: 0,
-                  }}
-                >
-                  <path d="M5 7.5 10 12.5 15 7.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
+                <ChevronDownIcon open={isModelMenuOpen} stroke={C.navy} />
               </button>
               {isModelMenuOpen && (
                 <ul
@@ -481,7 +745,7 @@ export function DocumentChatWidget({
                     left: 0,
                     right: 0,
                     top: "calc(100% + 4px)",
-                    zIndex: 50,
+                    zIndex: 60,
                     listStyle: "none",
                     margin: 0,
                     padding: "4px 0",
@@ -491,7 +755,7 @@ export function DocumentChatWidget({
                     boxShadow: "0 10px 28px rgba(0,0,0,0.12)",
                   }}
                 >
-                  {CHAT_MODEL_OPTIONS.map((option) => {
+                  {chatModelOptions.map((option) => {
                     const sel = option.id === selectedModelId;
                     return (
                       <li key={option.id} role="presentation">
@@ -525,26 +789,253 @@ export function DocumentChatWidget({
             </div>
           </div>
 
-          {/* Border */}
           <div style={{ height: 1, background: C.border, flexShrink: 0 }} />
 
-          {/* Messages */}
-          <div
-            ref={chatViewportRef}
-            className="lib-chat-scrollbar"
-            style={{
-              flex: 1,
-              background: C.paper,
-              backgroundImage: "repeating-linear-gradient(0deg,transparent,transparent 24px,rgba(180,160,120,0.06) 24px,rgba(180,160,120,0.06) 25px)",
-              padding: "20px 16px",
-              overflowY: "auto",
-              scrollBehavior: "smooth",
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
-            }}
-          >
-            {chatMessages.map(message => {
+          {/* Main area + sidebar */}
+          <div style={{ position: "relative", flex: 1, display: "flex", minHeight: 0 }}>
+            {isSidebarOpen && (
+              <div
+                aria-hidden
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  background: "rgba(26,39,68,0.25)",
+                  zIndex: 15,
+                }}
+                onClick={() => setIsSidebarOpen(false)}
+              />
+            )}
+
+            <aside
+              data-chat-sidebar
+              style={{
+                position: "absolute",
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: 260,
+                zIndex: 20,
+                background: C.paper,
+                borderRight: `1px solid ${C.border}`,
+                display: "flex",
+                flexDirection: "column",
+                transform: isSidebarOpen ? "translateX(0)" : "translateX(-100%)",
+                transition: "transform 220ms cubic-bezier(0.25, 0.46, 0.45, 0.94)",
+                boxShadow: isSidebarOpen ? "4px 0 20px rgba(0,0,0,0.08)" : "none",
+                pointerEvents: isSidebarOpen ? "auto" : "none",
+              }}
+            >
+              <div style={{ padding: "12px 10px 8px" }}>
+                <button
+                  type="button"
+                  onClick={handleNewChat}
+                  disabled={createChatMutation.isPending}
+                  style={{
+                    width: "100%",
+                    padding: "9px 14px",
+                    borderRadius: 4,
+                    border: `1px solid ${C.border}`,
+                    background: C.navy,
+                    cursor: createChatMutation.isPending ? "not-allowed" : "pointer",
+                    fontFamily: fontBody,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    letterSpacing: "0.04em",
+                    color: C.paper,
+                    opacity: createChatMutation.isPending ? 0.6 : 1,
+                  }}
+                >
+                  + New chat
+                </button>
+              </div>
+
+              <div style={{
+                padding: "6px 14px 8px",
+                fontFamily: fontBody,
+                fontSize: 11,
+                fontStyle: "italic",
+                color: C.muted,
+                letterSpacing: "0.06em",
+              }}>
+                Recent conversations
+              </div>
+
+              <div className="lib-chat-scrollbar" style={{ flex: 1, overflowY: "auto", padding: "0 10px 12px" }}>
+                {chatsQuery.isLoading && (
+                  <p style={{ fontFamily: fontBody, fontSize: 13, color: C.muted, textAlign: "center", margin: "16px 0" }}>
+                    Loading…
+                  </p>
+                )}
+                {chatsQuery.isError && (
+                  <p style={{ fontFamily: fontBody, fontSize: 12, color: "#8b3a3a", textAlign: "center", margin: "16px 8px" }}>
+                    Could not load chats.
+                  </p>
+                )}
+                {!chatsQuery.isLoading && !chatsQuery.isError && chats.length === 0 && (
+                  <p style={{ fontFamily: fontBody, fontSize: 12, color: C.muted, textAlign: "center", margin: "16px 8px" }}>
+                    No conversations yet.
+                  </p>
+                )}
+                {chats.map((chat) => {
+                  const isActive = chat.id === activeChatId;
+                  return (
+                    <div
+                      key={chat.id}
+                      style={{
+                        position: "relative",
+                        display: "flex",
+                        alignItems: "stretch",
+                        marginBottom: 8,
+                        border: `1px solid ${isActive ? C.gold : C.border}`,
+                        borderRadius: 4,
+                        background: isActive ? "rgba(201,124,42,0.08)" : "white",
+                        overflow: "visible",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => openConversation(chat)}
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          textAlign: "left",
+                          border: "none",
+                          background: "transparent",
+                          padding: "10px 32px 10px 12px",
+                          cursor: "pointer",
+                          fontFamily: fontBody,
+                          fontSize: 13,
+                          fontWeight: isActive ? 600 : 400,
+                          color: C.navy,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {chat.title}
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Options for ${chat.title}`}
+                        aria-expanded={chatContextMenuId === chat.id}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setChatContextMenuId((id) => (id === chat.id ? null : chat.id));
+                        }}
+                        style={{
+                          position: "absolute",
+                          right: 4,
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          width: 28,
+                          height: 28,
+                          border: "none",
+                          borderRadius: "50%",
+                          background: chatContextMenuId === chat.id ? "rgba(26,39,68,0.08)" : "transparent",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <MoreVerticalIcon />
+                      </button>
+                      {chatContextMenuId === chat.id && (
+                        <div
+                          data-chat-context-menu
+                          role="menu"
+                          style={{
+                            position: "absolute",
+                            right: 8,
+                            top: "100%",
+                            zIndex: 30,
+                            minWidth: 160,
+                            background: C.paper,
+                            border: `1px solid ${C.border}`,
+                            borderRadius: 3,
+                            boxShadow: "0 10px 28px rgba(0,0,0,0.12)",
+                            padding: "4px 0",
+                            marginTop: 2,
+                          }}
+                        >
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => openRenameModal(chat)}
+                            style={contextMenuItemStyle}
+                          >
+                            <PencilIcon size={16} />
+                            Rename
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => handleDeleteChatInList(chat)}
+                            style={{ ...contextMenuItemStyle, color: "#8b3a3a" }}
+                          >
+                            <TrashIcon size={16} />
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </aside>
+
+            {/* Messages */}
+            <div
+              ref={chatViewportRef}
+              className="lib-chat-scrollbar"
+              style={{
+                flex: 1,
+                background: C.paper,
+                backgroundImage: "repeating-linear-gradient(0deg,transparent,transparent 24px,rgba(180,160,120,0.06) 24px,rgba(180,160,120,0.06) 25px)",
+                padding: "20px 16px",
+                overflowY: "auto",
+                scrollBehavior: "smooth",
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+                width: "100%",
+              }}
+            >
+            {showEmptyState && (
+              <div style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                textAlign: "center",
+                padding: "16px 8px",
+                gap: 14,
+              }}>
+                <BookIcon size={36} color={C.gold} />
+                <div style={{
+                  maxWidth: "92%",
+                  fontFamily: fontBody,
+                  fontSize: 13,
+                  color: "#3a3020",
+                  lineHeight: 1.7,
+                  textAlign: "left",
+                  borderLeft: `2px solid ${C.gold}`,
+                  background: "rgba(201,124,42,0.04)",
+                  borderRadius: "0 4px 4px 0",
+                  padding: "12px 14px",
+                }}>
+                  {renderMessageText(buildInitialGreeting(folderId, contextLabel), "assistant")}
+                </div>
+              </div>
+            )}
+
+            {isHistoryLoading && (
+              <p style={{ fontFamily: fontBody, fontSize: 13, color: C.muted, textAlign: "center" }}>
+                Loading history…
+              </p>
+            )}
+            {!isHistoryLoading && !showEmptyState && chatMessages.map(message => {
               const isTypingMessage = assistantTyping?.messageId === message.id;
               const isAssistant = message.role === "assistant";
 
@@ -600,24 +1091,18 @@ export function DocumentChatWidget({
 
               /* User message */
               return (
-                <div key={message.id} style={{
-                  display: "flex", flexDirection: "column", alignItems: "flex-end",
-                }}>
-                  <div style={{
-                    borderRight: "2px solid " + C.navy,
-                    padding: "8px 12px 8px 0",
-                    marginRight: 4,
-                    fontFamily: fontBody, fontSize: 13,
-                    color: C.navy, lineHeight: 1.6,
-                    maxWidth: "85%", textAlign: "right",
-                    wordBreak: "break-word",
-                  }}>
-                    {renderMessageText(message.text, "user")}
-                  </div>
-                  <div style={{ marginTop: 4, paddingRight: 8 }}>
-                    <MessageCopyButton text={message.text} variant="user" />
-                  </div>
-                </div>
+                <UserMessageBubble
+                  key={message.id}
+                  message={message}
+                  isEditing={editingMessageId === message.id}
+                  editingText={editingMessageText}
+                  onEditingTextChange={setEditingMessageText}
+                  onStartEdit={() => startEditingMessage(message)}
+                  onCancelEdit={cancelEditingMessage}
+                  onSaveEdit={saveEditedMessage}
+                  isSavingEdit={editMessageMutation.isPending}
+                  canEdit={Boolean(activeChatId) && isEditableUserMessage(message.id)}
+                />
               );
             })}
 
@@ -631,9 +1116,7 @@ export function DocumentChatWidget({
               </p>
             )}
           </div>
-
-          {/* Border */}
-          <div style={{ height: 1, background: C.border, flexShrink: 0 }} />
+          </div>
 
           {/* Input area */}
           <form
@@ -641,7 +1124,9 @@ export function DocumentChatWidget({
             style={{
               background: C.paper,
               padding: "14px 16px",
-              display: "flex", alignItems: "center", gap: 12,
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
               flexShrink: 0,
             }}
           >
@@ -690,7 +1175,249 @@ export function DocumentChatWidget({
           </form>
         </div>
       )}
+
+      {isCreateModalOpen && (
+        <ChatTitleDialog
+          heading="New chat"
+          label="Chat title"
+          value={createTitleInput}
+          onChange={setCreateTitleInput}
+          submitLabel="Create"
+          isSubmitting={createChatMutation.isPending}
+          onClose={() => {
+            if (createChatMutation.isPending) return;
+            setIsCreateModalOpen(false);
+            setCreateTitleInput("");
+          }}
+          onSubmit={handleCreateChatSubmit}
+        />
+      )}
+
+      {renameTarget && (
+        <ChatTitleDialog
+          heading="Rename chat"
+          label="Chat title"
+          value={renameTitleInput}
+          onChange={setRenameTitleInput}
+          submitLabel="Save"
+          isSubmitting={updateChatMutation.isPending}
+          onClose={() => {
+            if (updateChatMutation.isPending) return;
+            setRenameTarget(null);
+            setRenameTitleInput("");
+          }}
+          onSubmit={handleRenameChatSubmit}
+        />
+      )}
     </>
+  );
+}
+
+const contextMenuItemStyle: CSSProperties = {
+  width: "100%",
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  padding: "10px 14px",
+  border: "none",
+  background: "transparent",
+  cursor: "pointer",
+  fontFamily: fontBody,
+  fontSize: 13,
+  color: C.navy,
+  textAlign: "left",
+};
+
+function MenuIcon({ color = C.navy }: { color?: string }) {
+  return (
+    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} aria-hidden>
+      <path strokeLinecap="round" d="M4 7h16M4 12h16M4 17h16" />
+    </svg>
+  );
+}
+
+function ChevronDownIcon({ open, stroke = C.muted }: { open: boolean; stroke?: string }) {
+  return (
+    <svg
+      width={12}
+      height={12}
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke={stroke}
+      strokeWidth={2}
+      aria-hidden
+      style={{
+        transform: open ? "rotate(180deg)" : "none",
+        transition: "transform 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94)",
+        flexShrink: 0,
+      }}
+    >
+      <path d="M5 7.5 10 12.5 15 7.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function MoreVerticalIcon() {
+  return (
+    <svg width={16} height={16} viewBox="0 0 24 24" fill={C.muted} aria-hidden>
+      <circle cx="12" cy="5" r="1.5" />
+      <circle cx="12" cy="12" r="1.5" />
+      <circle cx="12" cy="19" r="1.5" />
+    </svg>
+  );
+}
+
+function PencilIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 20h9M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+    </svg>
+  );
+}
+
+function TrashIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18M8 6V4h8v2m-1 14H9a1 1 0 0 1-1-1V7h12v12a1 1 0 0 1-1 1z" />
+    </svg>
+  );
+}
+
+function ChatTitleDialog({
+  heading,
+  label,
+  value,
+  onChange,
+  submitLabel,
+  isSubmitting,
+  onClose,
+  onSubmit,
+}: {
+  heading: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  submitLabel: string;
+  isSubmitting: boolean;
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="chat-title-dialog-heading"
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 100,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "rgba(26,39,68,0.45)",
+        padding: 16,
+      }}
+      onClick={onClose}
+    >
+      <form
+        onSubmit={onSubmit}
+        onClick={(event) => event.stopPropagation()}
+        style={{
+          width: "100%",
+          maxWidth: 320,
+          background: C.paper,
+          border: `1px solid ${C.border}`,
+          borderRadius: 6,
+          boxShadow: "0 16px 48px rgba(0,0,0,0.2)",
+          padding: "18px 20px",
+          fontFamily: fontBody,
+        }}
+      >
+        <h2
+          id="chat-title-dialog-heading"
+          style={{
+            margin: "0 0 14px",
+            fontFamily: fontSerif,
+            fontSize: 17,
+            fontWeight: 700,
+            color: C.navy,
+          }}
+        >
+          {heading}
+        </h2>
+        <label
+          htmlFor="chat-title-input"
+          style={{ display: "block", fontSize: 12, color: C.muted, marginBottom: 6 }}
+        >
+          {label}
+        </label>
+        <input
+          ref={inputRef}
+          id="chat-title-input"
+          type="text"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          disabled={isSubmitting}
+          placeholder="Enter a title"
+          maxLength={120}
+          style={{
+            width: "100%",
+            boxSizing: "border-box",
+            fontFamily: fontBody,
+            fontSize: 14,
+            color: C.navy,
+            border: `1px solid ${C.border}`,
+            borderRadius: 3,
+            padding: "8px 10px",
+            marginBottom: 16,
+            outline: "none",
+          }}
+        />
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSubmitting}
+            style={{
+              fontFamily: fontBody,
+              fontSize: 12,
+              padding: "7px 14px",
+              border: `1px solid ${C.border}`,
+              borderRadius: 3,
+              background: "white",
+              color: C.navy,
+              cursor: isSubmitting ? "not-allowed" : "pointer",
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={isSubmitting || !value.trim()}
+            style={{
+              fontFamily: fontBody,
+              fontSize: 12,
+              fontWeight: 600,
+              padding: "7px 14px",
+              border: "none",
+              borderRadius: 3,
+              background: C.navy,
+              color: C.paper,
+              cursor: isSubmitting || !value.trim() ? "not-allowed" : "pointer",
+              opacity: isSubmitting || !value.trim() ? 0.6 : 1,
+            }}
+          >
+            {isSubmitting ? `${submitLabel}…` : submitLabel}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 
@@ -749,6 +1476,238 @@ function TextareaWithFocus({
 TextareaWithFocus.displayName = "TextareaWithFocus";
 
 /* ── Utility functions (unchanged logic) ── */
+
+function isEditableUserMessage(messageId: string): boolean {
+  return !messageId.startsWith("pending-user-") && !messageId.endsWith("-assistant-error");
+}
+
+function pickUserMessageIdFromResponse(payload: unknown): string | undefined {
+  if (payload == null || typeof payload !== "object") {
+    return undefined;
+  }
+  const r = payload as Record<string, unknown>;
+  const direct =
+    (typeof r.userMessageId === "string" && r.userMessageId.trim()) ||
+    (typeof r.messageId === "string" && r.messageId.trim()) ||
+    "";
+  if (direct) {
+    return direct;
+  }
+  const userMessage = r.userMessage;
+  if (userMessage != null && typeof userMessage === "object") {
+    const m = userMessage as Record<string, unknown>;
+    if (typeof m.id === "string" && m.id.trim()) {
+      return m.id.trim();
+    }
+  }
+  return undefined;
+}
+
+function UserMessageBubble({
+  message,
+  isEditing,
+  editingText,
+  onEditingTextChange,
+  onStartEdit,
+  onCancelEdit,
+  onSaveEdit,
+  isSavingEdit,
+  canEdit,
+}: {
+  message: ChatMessage;
+  isEditing: boolean;
+  editingText: string;
+  onEditingTextChange: (value: string) => void;
+  onStartEdit: () => void;
+  onCancelEdit: () => void;
+  onSaveEdit: () => void;
+  isSavingEdit: boolean;
+  canEdit: boolean;
+}) {
+  const [isHovered, setIsHovered] = useState(false);
+  const editInputRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    if (!isEditing || !editInputRef.current) return;
+    editInputRef.current.focus();
+    editInputRef.current.style.height = "auto";
+    editInputRef.current.style.height = `${editInputRef.current.scrollHeight}px`;
+  }, [isEditing, editingText]);
+
+  const showActions = (isHovered || isEditing) && !isSavingEdit;
+
+  return (
+    <div
+      style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", maxWidth: "100%" }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {isEditing ? (
+        <div style={{
+          width: "85%",
+          maxWidth: "85%",
+          borderRight: `2px solid ${C.navy}`,
+          paddingRight: 4,
+        }}>
+          <textarea
+            ref={editInputRef}
+            value={editingText}
+            onChange={(e) => onEditingTextChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                onSaveEdit();
+              }
+              if (e.key === "Escape") {
+                e.preventDefault();
+                onCancelEdit();
+              }
+            }}
+            rows={2}
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              fontFamily: fontBody,
+              fontSize: 13,
+              color: C.navy,
+              lineHeight: 1.6,
+              border: `1px solid ${C.border}`,
+              borderRadius: 3,
+              padding: "8px 10px",
+              resize: "vertical",
+              minHeight: 56,
+              background: "#fff",
+            }}
+          />
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
+            <button
+              type="button"
+              onClick={onCancelEdit}
+              disabled={isSavingEdit}
+              style={{
+                fontFamily: fontBody,
+                fontSize: 11,
+                padding: "5px 10px",
+                border: `1px solid ${C.border}`,
+                borderRadius: 3,
+                background: "#fff",
+                color: C.navy,
+                cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={onSaveEdit}
+              disabled={isSavingEdit || !editingText.trim()}
+              style={{
+                fontFamily: fontBody,
+                fontSize: 11,
+                fontWeight: 600,
+                padding: "5px 10px",
+                border: "none",
+                borderRadius: 3,
+                background: C.navy,
+                color: C.paper,
+                cursor: isSavingEdit || !editingText.trim() ? "not-allowed" : "pointer",
+                opacity: isSavingEdit || !editingText.trim() ? 0.6 : 1,
+              }}
+            >
+              {isSavingEdit ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div style={{
+            borderRight: `2px solid ${C.navy}`,
+            padding: "8px 12px 8px 0",
+            marginRight: 4,
+            fontFamily: fontBody,
+            fontSize: 13,
+            color: C.navy,
+            lineHeight: 1.6,
+            maxWidth: "85%",
+            textAlign: "right",
+            wordBreak: "break-word",
+          }}>
+            {renderMessageText(message.text, "user")}
+          </div>
+          {showActions && (
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              marginTop: 4,
+              paddingRight: 8,
+            }}>
+              <MessageCopyButton text={message.text} variant="user" />
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={onStartEdit}
+                  aria-label="Edit message"
+                  title="Edit message"
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: "50%",
+                    border: `1px solid ${C.border}`,
+                    background: "#fff",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: C.muted,
+                    padding: 0,
+                  }}
+                >
+                  <PencilIcon size={14} />
+                </button>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function historyToChatMessages(
+  messages: ChatHistoryMessage[],
+  folderId: string,
+  contextLabel?: string,
+): ChatMessage[] {
+  if (messages.length === 0) {
+    return [{
+      id: "assistant-greeting",
+      role: "assistant",
+      text: buildInitialGreeting(folderId, contextLabel),
+    }];
+  }
+  return messages.map((message) => ({
+    id: message.id,
+    role: message.role,
+    text: message.content,
+    referencedPages: message.referencedPages
+      ? normalizeReferencedPages(message.referencedPages)
+      : undefined,
+  }));
+}
+
+function formatChatTimestamp(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return iso;
+  }
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
 
 function getChatbotErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {

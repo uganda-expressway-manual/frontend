@@ -122,6 +122,41 @@ export interface HighlightItem {
   updatedAt: string;
 }
 
+/** Summary row from `GET /chat`. */
+export interface ChatRoomSummary {
+  id: string;
+  title: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/** Message row inside `GET /chat/:chatId` history. */
+export interface ChatHistoryMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  referencedPages?: ChatReferencePage[];
+  createdAt?: string;
+}
+
+export interface ChatReferencePage {
+  label?: string;
+  href?: string;
+  url?: string;
+  link?: string;
+  fileId?: string;
+  file_id?: string;
+  id?: string;
+  page?: number | string;
+  pageNumber?: number | string;
+  filename?: string;
+}
+
+/** Full chat room with transcript from `GET /chat/:chatId`. */
+export interface ChatRoomDetail extends ChatRoomSummary {
+  messages: ChatHistoryMessage[];
+}
+
 /** Backend page note row (`GET|POST /notes/:fileId`, `GET|PATCH|DELETE /notes/:fileId/:noteId`). `page` is 1-based. */
 export interface NoteItem {
   id: string;

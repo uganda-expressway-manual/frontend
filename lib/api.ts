@@ -10,6 +10,9 @@ import {
 import { authStore } from "@/lib/auth-store";
 import {
   BookmarkItem,
+  ChatHistoryMessage,
+  ChatRoomDetail,
+  ChatRoomSummary,
   HighlightItem,
   NoteItem,
   PdfPresignedUrlResponse,
@@ -35,6 +38,25 @@ export const USERS_SIGNUP_ROUTES = {
   user: "/users/signup/user",
   admin: "/users/signup/admin",
 } as const;
+
+/** Express chatbot routes — keep aligned with backend. */
+export const CHATBOT_ROUTES = {
+  chat: "/chatbot",
+  availableModels: "/chatbot/available_models",
+} as const;
+
+/** Chat room CRUD — keep aligned with backend. */
+export const CHAT_ROUTES = {
+  list: "/chat",
+  byId: (chatId: string) => `/chat/${encodeURIComponent(chatId)}`,
+  message: (chatId: string, messageId: string) =>
+    `/chat/${encodeURIComponent(chatId)}/message/${encodeURIComponent(messageId)}`,
+} as const;
+
+export type ChatModelOption = {
+  id: string;
+  label: string;
+};
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -648,4 +670,248 @@ export async function updateNote(
 
 export async function deleteNote(fileId: string, noteId: string): Promise<void> {
   await api.delete(notesPath(fileId, noteId));
+}
+
+/* ------------------------------------------------------------------ */
+/* Chatbot                                                            */
+/* ------------------------------------------------------------------ */
+
+function parseChatModelOption(entry: unknown): ChatModelOption | null {
+  if (typeof entry === "string" && entry.trim()) {
+    const id = entry.trim();
+    return { id, label: id };
+  }
+  if (entry != null && typeof entry === "object") {
+    const o = entry as Record<string, unknown>;
+    const id =
+      (typeof o.id === "string" && o.id.trim()) ||
+      (typeof o.model === "string" && o.model.trim()) ||
+      (typeof o.modelId === "string" && o.modelId.trim()) ||
+      "";
+    const label =
+      (typeof o.label === "string" && o.label.trim()) ||
+      (typeof o.name === "string" && o.name.trim()) ||
+      id;
+    if (id) {
+      return { id, label: label || id };
+    }
+  }
+  return null;
+}
+
+export function parseChatbotAvailableModelsPayload(data: unknown): ChatModelOption[] {
+  if (Array.isArray(data)) {
+    return data.map(parseChatModelOption).filter((m): m is ChatModelOption => m !== null);
+  }
+  if (data != null && typeof data === "object") {
+    const r = data as Record<string, unknown>;
+    for (const key of ["models", "available_models", "data"] as const) {
+      const nested = r[key];
+      if (Array.isArray(nested)) {
+        const parsed = nested.map(parseChatModelOption).filter((m): m is ChatModelOption => m !== null);
+        if (parsed.length > 0) {
+          return parsed;
+        }
+      }
+    }
+  }
+  return [];
+}
+
+/** GET `/chatbot/available_models` — models the user may select for chat. */
+export async function getChatbotAvailableModels(): Promise<ChatModelOption[]> {
+  const { data } = await api.get<unknown>(CHATBOT_ROUTES.availableModels);
+  return parseChatbotAvailableModelsPayload(data);
+}
+
+export type ChatbotMessagePayload = {
+  chatId: string;
+  text: string;
+};
+
+/** POST `/chatbot` — send a message in a chat room. */
+export async function postChatbotMessage(payload: ChatbotMessagePayload): Promise<unknown> {
+  const { data } = await api.post<unknown>(CHATBOT_ROUTES.chat, payload);
+  return data;
+}
+
+/** PATCH `/chat/:chatId/message/:messageId` — edit a user message. */
+export async function patchChatMessage(
+  chatId: string,
+  messageId: string,
+  text: string,
+): Promise<void> {
+  await api.patch(CHAT_ROUTES.message(chatId, messageId), { text });
+}
+
+/* ------------------------------------------------------------------ */
+/* Chat rooms                                                         */
+/* ------------------------------------------------------------------ */
+
+function pickChatId(value: Record<string, unknown>): string {
+  const id =
+    (typeof value.id === "string" && value.id.trim()) ||
+    (typeof value.chatId === "string" && value.chatId.trim()) ||
+    (typeof value._id === "string" && value._id.trim()) ||
+    "";
+  return id;
+}
+
+function parseChatRoomSummary(entry: unknown): ChatRoomSummary | null {
+  if (entry == null || typeof entry !== "object") {
+    return null;
+  }
+  const o = entry as Record<string, unknown>;
+  const id = pickChatId(o);
+  const title =
+    (typeof o.title === "string" && o.title.trim()) ||
+    (typeof o.name === "string" && o.name.trim()) ||
+    "Untitled chat";
+  if (!id) {
+    return null;
+  }
+  return {
+    id,
+    title,
+    ...(typeof o.createdAt === "string" ? { createdAt: o.createdAt } : {}),
+    ...(typeof o.updatedAt === "string" ? { updatedAt: o.updatedAt } : {}),
+  };
+}
+
+function parseChatListPayload(data: unknown): ChatRoomSummary[] {
+  if (Array.isArray(data)) {
+    return data.map(parseChatRoomSummary).filter((c): c is ChatRoomSummary => c !== null);
+  }
+  if (data != null && typeof data === "object") {
+    const r = data as Record<string, unknown>;
+    for (const key of ["chats", "data", "items", "results"] as const) {
+      const nested = r[key];
+      if (Array.isArray(nested)) {
+        const parsed = nested.map(parseChatRoomSummary).filter((c): c is ChatRoomSummary => c !== null);
+        if (parsed.length > 0) {
+          return parsed;
+        }
+      }
+    }
+    const single = parseChatRoomSummary(data);
+    if (single) {
+      return [single];
+    }
+  }
+  return [];
+}
+
+function parseChatMessageRole(value: unknown): "user" | "assistant" | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "user" || normalized === "human") {
+    return "user";
+  }
+  if (normalized === "assistant" || normalized === "ai" || normalized === "bot" || normalized === "model") {
+    return "assistant";
+  }
+  return null;
+}
+
+function parseChatHistoryMessage(entry: unknown, index: number): ChatHistoryMessage | null {
+  if (entry == null || typeof entry !== "object") {
+    return null;
+  }
+  const o = entry as Record<string, unknown>;
+  const role = parseChatMessageRole(o.role ?? o.sender ?? o.type);
+  const content =
+    (typeof o.text === "string" && o.text) ||
+    (typeof o.content === "string" && o.content) ||
+    (typeof o.message === "string" && o.message) ||
+    (typeof o.body === "string" && o.body) ||
+    "";
+  if (!role) {
+    return null;
+  }
+  const id =
+    (typeof o.id === "string" && o.id.trim()) ||
+    (typeof o.messageId === "string" && o.messageId.trim()) ||
+    `history-${index}`;
+  const referencedPages = Array.isArray(o.referencedPages) ? o.referencedPages : undefined;
+  return {
+    id,
+    role,
+    content,
+    ...(referencedPages ? { referencedPages } : {}),
+    ...(typeof o.createdAt === "string" ? { createdAt: o.createdAt } : {}),
+  };
+}
+
+function parseChatHistoryPayload(data: unknown): ChatRoomDetail {
+  if (data == null || typeof data !== "object") {
+    return { id: "", title: "Untitled chat", messages: [] };
+  }
+  const r = data as Record<string, unknown>;
+  const summary = parseChatRoomSummary(data) ?? { id: pickChatId(r), title: "Untitled chat" };
+  let messages: ChatHistoryMessage[] = [];
+  for (const key of ["messages", "history", "items", "data"] as const) {
+    const nested = r[key];
+    if (Array.isArray(nested)) {
+      messages = nested
+        .map((entry, index) => parseChatHistoryMessage(entry, index))
+        .filter((m): m is ChatHistoryMessage => m !== null);
+      if (messages.length > 0) {
+        break;
+      }
+    }
+  }
+  return {
+    id: summary.id,
+    title: summary.title,
+    ...(summary.createdAt ? { createdAt: summary.createdAt } : {}),
+    ...(summary.updatedAt ? { updatedAt: summary.updatedAt } : {}),
+    messages,
+  };
+}
+
+/** GET `/chat` — list chat rooms for the current user. */
+export async function listChats(): Promise<ChatRoomSummary[]> {
+  const { data } = await api.get<unknown>(CHAT_ROUTES.list);
+  return parseChatListPayload(data);
+}
+
+/** POST `/chat` — create a chat room. */
+export async function createChat(title: string): Promise<ChatRoomSummary> {
+  const { data } = await api.post<unknown>(CHAT_ROUTES.list, { title: title.trim() });
+  const parsed = parseChatRoomSummary(data);
+  if (parsed) {
+    return parsed;
+  }
+  const list = parseChatListPayload(data);
+  if (list[0]) {
+    return list[0];
+  }
+  throw new Error("Create chat response missing chat id");
+}
+
+/** GET `/chat/:chatId` — chat room metadata and message history. */
+export async function getChatHistory(chatId: string): Promise<ChatRoomDetail> {
+  const { data } = await api.get<unknown>(CHAT_ROUTES.byId(chatId));
+  const parsed = parseChatHistoryPayload(data);
+  if (!parsed.id) {
+    return { ...parsed, id: chatId };
+  }
+  return parsed;
+}
+
+/** PATCH `/chat/:chatId` — update chat room (e.g. title). */
+export async function updateChat(chatId: string, payload: { title: string }): Promise<ChatRoomSummary> {
+  const { data } = await api.patch<unknown>(CHAT_ROUTES.byId(chatId), payload);
+  const parsed = parseChatRoomSummary(data);
+  if (parsed) {
+    return parsed;
+  }
+  return { id: chatId, title: payload.title.trim() || "Untitled chat" };
+}
+
+/** DELETE `/chat/:chatId` — remove a chat room. */
+export async function deleteChat(chatId: string): Promise<void> {
+  await api.delete(CHAT_ROUTES.byId(chatId));
 }
