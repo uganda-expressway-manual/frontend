@@ -748,13 +748,73 @@ export async function patchChatMessage(
 /* Chat rooms                                                         */
 /* ------------------------------------------------------------------ */
 
+function coerceIdString(value: unknown): string {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed || "";
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  return "";
+}
+
 function pickChatId(value: Record<string, unknown>): string {
-  const id =
-    (typeof value.id === "string" && value.id.trim()) ||
-    (typeof value.chatId === "string" && value.chatId.trim()) ||
-    (typeof value._id === "string" && value._id.trim()) ||
-    "";
-  return id;
+  return (
+    coerceIdString(value.id) ||
+    coerceIdString(value.chatId) ||
+    coerceIdString(value._id) ||
+    ""
+  );
+}
+
+function unwrapJsonPayload(data: unknown): unknown {
+  if (typeof data === "string") {
+    const trimmed = data.trim();
+    if (!trimmed) {
+      return data;
+    }
+    try {
+      return JSON.parse(trimmed) as unknown;
+    } catch {
+      return data;
+    }
+  }
+  return data;
+}
+
+/** Resolve a single chat room from POST/GET payloads (flat or wrapped). */
+function parseChatRoomFromPayload(data: unknown): ChatRoomSummary | null {
+  const payload = unwrapJsonPayload(data);
+  const direct = parseChatRoomSummary(payload);
+  if (direct) {
+    return direct;
+  }
+  if (payload != null && typeof payload === "object") {
+    const r = payload as Record<string, unknown>;
+    for (const key of ["data", "chat", "room", "conversation", "result"] as const) {
+      const nested = r[key];
+      if (nested == null) {
+        continue;
+      }
+      if (Array.isArray(nested)) {
+        for (const entry of nested) {
+          const parsed = parseChatRoomSummary(entry);
+          if (parsed) {
+            return parsed;
+          }
+        }
+        continue;
+      }
+      if (typeof nested === "object") {
+        const parsed = parseChatRoomSummary(nested);
+        if (parsed) {
+          return parsed;
+        }
+      }
+    }
+  }
+  return null;
 }
 
 function parseChatRoomSummary(entry: unknown): ChatRoomSummary | null {
@@ -802,11 +862,14 @@ function parseChatListPayload(data: unknown): ChatRoomSummary[] {
 }
 
 function parseChatMessageRole(value: unknown): "user" | "assistant" | null {
+  if (typeof value === "boolean") {
+    return value ? "user" : "assistant";
+  }
   if (typeof value !== "string") {
     return null;
   }
   const normalized = value.trim().toLowerCase();
-  if (normalized === "user" || normalized === "human") {
+  if (normalized === "user" || normalized === "human" || normalized === "client") {
     return "user";
   }
   if (
@@ -821,12 +884,58 @@ function parseChatMessageRole(value: unknown): "user" | "assistant" | null {
   return null;
 }
 
+function extractChatMessageArray(source: Record<string, unknown>): unknown[] | null {
+  for (const key of [
+    "messages",
+    "history",
+    "items",
+    "chatMessages",
+    "conversation",
+    "transcript",
+  ] as const) {
+    const nested = source[key];
+    if (Array.isArray(nested)) {
+      return nested;
+    }
+    if (nested != null && typeof nested === "object" && !Array.isArray(nested)) {
+      const inner = extractChatMessageArray(nested as Record<string, unknown>);
+      if (inner) {
+        return inner;
+      }
+    }
+  }
+  const data = source.data;
+  if (Array.isArray(data)) {
+    return data;
+  }
+  if (data != null && typeof data === "object" && !Array.isArray(data)) {
+    const fromData = extractChatMessageArray(data as Record<string, unknown>);
+    if (fromData) {
+      return fromData;
+    }
+  }
+  const chat = source.chat;
+  if (chat != null && typeof chat === "object" && !Array.isArray(chat)) {
+    const fromChat = extractChatMessageArray(chat as Record<string, unknown>);
+    if (fromChat) {
+      return fromChat;
+    }
+  }
+  return null;
+}
+
 function parseChatHistoryMessage(entry: unknown, index: number): ChatHistoryMessage | null {
   if (entry == null || typeof entry !== "object") {
     return null;
   }
   const o = entry as Record<string, unknown>;
+<<<<<<< HEAD
   const role = parseChatMessageRole(o.role ?? o.from ?? o.sender ?? o.type);
+=======
+  const role = parseChatMessageRole(
+    o.role ?? o.sender ?? o.type ?? o.author ?? o.from ?? o.isUser,
+  );
+>>>>>>> d0b28f010d6e5647103187cb67c442c4d857ba21
   const content =
     (typeof o.text === "string" && o.text) ||
     (typeof o.content === "string" && o.content) ||
@@ -851,23 +960,19 @@ function parseChatHistoryMessage(entry: unknown, index: number): ChatHistoryMess
 }
 
 function parseChatHistoryPayload(data: unknown): ChatRoomDetail {
-  if (data == null || typeof data !== "object") {
+  const payload = unwrapJsonPayload(data);
+  if (payload == null || typeof payload !== "object") {
     return { id: "", title: "Untitled chat", messages: [] };
   }
-  const r = data as Record<string, unknown>;
-  const summary = parseChatRoomSummary(data) ?? { id: pickChatId(r), title: "Untitled chat" };
-  let messages: ChatHistoryMessage[] = [];
-  for (const key of ["messages", "history", "items", "data"] as const) {
-    const nested = r[key];
-    if (Array.isArray(nested)) {
-      messages = nested
-        .map((entry, index) => parseChatHistoryMessage(entry, index))
-        .filter((m): m is ChatHistoryMessage => m !== null);
-      if (messages.length > 0) {
-        break;
-      }
-    }
-  }
+  const r = payload as Record<string, unknown>;
+  const summary =
+    parseChatRoomSummary(payload) ??
+    parseChatRoomSummary(r.chat) ??
+    { id: pickChatId(r), title: "Untitled chat" };
+  const rawMessages = extractChatMessageArray(r) ?? [];
+  const messages = rawMessages
+    .map((entry, index) => parseChatHistoryMessage(entry, index))
+    .filter((m): m is ChatHistoryMessage => m !== null);
   return {
     id: summary.id,
     title: summary.title,
@@ -885,12 +990,13 @@ export async function listChats(): Promise<ChatRoomSummary[]> {
 
 /** POST `/chat` — create a chat room. */
 export async function createChat(title: string): Promise<ChatRoomSummary> {
-  const { data } = await api.post<unknown>(CHAT_ROUTES.list, { title: title.trim() });
-  const parsed = parseChatRoomSummary(data);
+  const trimmedTitle = title.trim();
+  const { data } = await api.post<unknown>(CHAT_ROUTES.list, { title: trimmedTitle });
+  const parsed = parseChatRoomFromPayload(data);
   if (parsed) {
     return parsed;
   }
-  const list = parseChatListPayload(data);
+  const list = parseChatListPayload(unwrapJsonPayload(data));
   if (list[0]) {
     return list[0];
   }
@@ -900,7 +1006,7 @@ export async function createChat(title: string): Promise<ChatRoomSummary> {
 /** GET `/chat/:chatId` — chat room metadata and message history. */
 export async function getChatHistory(chatId: string): Promise<ChatRoomDetail> {
   const { data } = await api.get<unknown>(CHAT_ROUTES.byId(chatId));
-  const parsed = parseChatHistoryPayload(data);
+  const parsed = parseChatHistoryPayload(unwrapJsonPayload(data));
   if (!parsed.id) {
     return { ...parsed, id: chatId };
   }
