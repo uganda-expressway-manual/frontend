@@ -102,11 +102,7 @@ export function DocumentChatWidget({
   const [activeChatTitle, setActiveChatTitle] = useState("");
   const [chatInput, setChatInput] = useState("");
   const [selectedModelId, setSelectedModelId] = useState("");
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => [{
-    id: "assistant-greeting",
-    role: "assistant",
-    text: buildInitialGreeting(folderId, contextLabel),
-  }]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [assistantTyping, setAssistantTyping] = useState<AssistantTypingState | null>(null);
   const [tabHovered, setTabHovered] = useState(false);
   const [panelVisible, setPanelVisible] = useState(false);
@@ -120,10 +116,13 @@ export function DocumentChatWidget({
   const modelMenuRef = useRef<HTMLDivElement | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [createTitleInput, setCreateTitleInput] = useState("");
+  const [createChatError, setCreateChatError] = useState("");
   const [renameTarget, setRenameTarget] = useState<ChatRoomSummary | null>(null);
   const [renameTitleInput, setRenameTitleInput] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<ChatRoomSummary | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingMessageText, setEditingMessageText] = useState("");
+  const [showNewChatIntro, setShowNewChatIntro] = useState(false);
 
   const modelsQuery = useQuery({
     queryKey: ["chatbot", "available_models"],
@@ -149,62 +148,111 @@ export function DocumentChatWidget({
       : FALLBACK_CHAT_MODEL_OPTIONS;
 
   const chats = chatsQuery.data ?? [];
-  const isHistoryLoading = Boolean(activeChatId) && chatHistoryQuery.isLoading;
+  const isHistoryLoading =
+    Boolean(activeChatId) &&
+    !showNewChatIntro &&
+    (chatHistoryQuery.isLoading || chatHistoryQuery.isFetching) &&
+    chatMessages.length === 0;
 
   const resetToNewChat = useCallback(() => {
     setActiveChatId(null);
     setActiveChatTitle("");
     setAssistantTyping(null);
-    setChatMessages([{
-      id: "assistant-greeting",
-      role: "assistant",
-      text: buildInitialGreeting(folderId, contextLabel),
-    }]);
-  }, [folderId, contextLabel]);
+    setEditingMessageId(null);
+    setEditingMessageText("");
+    setShowNewChatIntro(false);
+    setChatMessages([]);
+  }, []);
 
   const openConversation = useCallback((chat: ChatRoomSummary) => {
+    setShowNewChatIntro(false);
     setActiveChatId(chat.id);
     setActiveChatTitle(chat.title);
     setAssistantTyping(null);
+    setEditingMessageId(null);
+    setEditingMessageText("");
     setIsSidebarOpen(false);
     setChatContextMenuId(null);
-  }, []);
+    setChatMessages([]);
+    void queryClient.invalidateQueries({ queryKey: ["chat", chat.id, "history"] });
+  }, [queryClient]);
 
   useEffect(() => {
     if (!activeChatId) {
       return;
     }
-    if (chatHistoryQuery.isLoading || !chatHistoryQuery.isSuccess || !chatHistoryQuery.data) {
+    if (chatHistoryQuery.isLoading || chatHistoryQuery.isFetching) {
+      return;
+    }
+    if (!chatHistoryQuery.isSuccess || !chatHistoryQuery.data) {
+      return;
+    }
+    const historyChatId = chatHistoryQuery.data.id || activeChatId;
+    if (historyChatId !== activeChatId) {
       return;
     }
     setActiveChatTitle(chatHistoryQuery.data.title);
-    setChatMessages(historyToChatMessages(chatHistoryQuery.data.messages, folderId, contextLabel));
+    const historyMessages = chatHistoryQuery.data.messages;
+    if (historyMessages.length > 0) {
+      setShowNewChatIntro(false);
+      setChatMessages(
+        historyToChatMessages(historyMessages, folderId, contextLabel, { emptyGreeting: false }),
+      );
+      return;
+    }
+    if (showNewChatIntro) {
+      return;
+    }
+    setChatMessages([]);
   }, [
     activeChatId,
     chatHistoryQuery.data,
     chatHistoryQuery.isLoading,
+    chatHistoryQuery.isFetching,
     chatHistoryQuery.isSuccess,
     folderId,
     contextLabel,
+    showNewChatIntro,
   ]);
 
   const refreshChatList = useCallback(async () => {
     await queryClient.refetchQueries({ queryKey: ["chats"] });
   }, [queryClient]);
 
+  const enterChatroom = useCallback((chat: ChatRoomSummary) => {
+    void queryClient.removeQueries({ queryKey: ["chat", chat.id, "history"] });
+    setIsSidebarOpen(false);
+    setChatContextMenuId(null);
+    setShowNewChatIntro(true);
+    setActiveChatId(chat.id);
+    setActiveChatTitle(chat.title);
+    setAssistantTyping(null);
+    setEditingMessageId(null);
+    setEditingMessageText("");
+    setChatMessages([{
+      id: "assistant-greeting",
+      role: "assistant",
+      text: buildInitialGreeting(folderId, contextLabel),
+    }]);
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }, [folderId, contextLabel, queryClient]);
+
   const createChatMutation = useMutation({
     mutationFn: (title: string) => createChat(title),
-    onSuccess: async (chat) => {
+    onMutate: () => {
+      setCreateChatError("");
       setIsCreateModalOpen(false);
+    },
+    onSuccess: (chat) => {
       setCreateTitleInput("");
-      await refreshChatList();
-      setIsSidebarOpen(false);
-      openConversation(chat);
-      setChatMessages([{
-        id: "assistant-greeting",
-        role: "assistant",
-        text: buildInitialGreeting(folderId, contextLabel),
-      }]);
+      setCreateChatError("");
+      enterChatroom(chat);
+      void refreshChatList();
+    },
+    onError: (error, title) => {
+      setCreateTitleInput(title);
+      setCreateChatError(getChatbotErrorMessage(error));
+      setIsCreateModalOpen(true);
     },
   });
 
@@ -223,12 +271,13 @@ export function DocumentChatWidget({
 
   const deleteChatMutation = useMutation({
     mutationFn: (chatId: string) => deleteChat(chatId),
-    onSuccess: async (_data, chatId) => {
+    onSuccess: (_data, chatId) => {
+      setDeleteTarget(null);
       setChatContextMenuId(null);
       if (activeChatId === chatId) {
         resetToNewChat();
       }
-      await refreshChatList();
+      void refreshChatList();
     },
   });
 
@@ -256,7 +305,8 @@ export function DocumentChatWidget({
       if (
         target.closest("[data-chat-sidebar]") ||
         target.closest("[data-chat-context-menu]") ||
-        target.closest("[data-chat-chrome]")
+        target.closest("[data-chat-chrome]") ||
+        target.closest("[data-chat-dialog]")
       ) {
         return;
       }
@@ -291,7 +341,10 @@ export function DocumentChatWidget({
     }
     setTabHovered(false);
     setIsChatOpen(true);
-  }, []);
+    if (!activeChatId) {
+      setIsSidebarOpen(true);
+    }
+  }, [activeChatId]);
 
   const closeChat = useCallback(() => {
     if (!isChatOpen) return;
@@ -403,24 +456,14 @@ export function DocumentChatWidget({
     mutationFn: async ({
       text,
       requestId,
-      titleHint,
-      chatId: existingChatId,
+      chatId,
       pendingUserMessageId,
     }: {
       text: string;
       requestId: number;
-      titleHint: string;
-      chatId: string | null;
+      chatId: string;
       pendingUserMessageId: string;
     }) => {
-      let chatId = existingChatId;
-      if (!chatId) {
-        const created = await createChat(titleHint.slice(0, 80) || "New conversation");
-        chatId = created.id;
-        setActiveChatId(created.id);
-        setActiveChatTitle(created.title);
-        void queryClient.invalidateQueries({ queryKey: ["chats"] });
-      }
       const data = await postChatbotMessage({ chatId, text });
       return {
         ...resolveChatbotResponse(data),
@@ -468,6 +511,10 @@ export function DocumentChatWidget({
 
   const submitChatMessage = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!activeChatId) {
+      setIsSidebarOpen(true);
+      return;
+    }
     const trimmedMessage = chatInput.trim();
     if (!trimmedMessage || chatMutation.isPending || assistantTyping) {
       return;
@@ -483,7 +530,6 @@ export function DocumentChatWidget({
     chatMutation.mutate({
       text: trimmedMessage,
       requestId,
-      titleHint: trimmedMessage,
       chatId: activeChatId,
       pendingUserMessageId,
     });
@@ -513,6 +559,7 @@ export function DocumentChatWidget({
 
   const handleNewChat = () => {
     setCreateTitleInput("");
+    setCreateChatError("");
     setIsCreateModalOpen(true);
   };
 
@@ -539,8 +586,12 @@ export function DocumentChatWidget({
 
   const handleDeleteChatInList = (chat: ChatRoomSummary) => {
     setChatContextMenuId(null);
-    if (!window.confirm(`Delete "${chat.title}"?`)) return;
-    deleteChatMutation.mutate(chat.id);
+    setDeleteTarget(chat);
+  };
+
+  const handleConfirmDeleteChat = () => {
+    if (!deleteTarget || deleteChatMutation.isPending) return;
+    deleteChatMutation.mutate(deleteTarget.id);
   };
 
   const stopConversation = () => {
@@ -552,8 +603,14 @@ export function DocumentChatWidget({
   const inputEmpty = !chatInput.trim();
   const selectedModelLabel =
     chatModelOptions.find((m) => m.id === selectedModelId)?.label ?? chatModelOptions[0]?.label ?? "";
-  const modelPickerDisabled = chatMutation.isPending || Boolean(assistantTyping);
-  const showEmptyState =
+  const hasActiveChatroom = Boolean(activeChatId);
+  const modelPickerDisabled =
+    !hasActiveChatroom || chatMutation.isPending || Boolean(assistantTyping);
+  const inputDisabled = !hasActiveChatroom || isConversationRunning;
+  const showNoChatroomPrompt = !hasActiveChatroom && !isHistoryLoading;
+  const showGreetingEmpty =
+    showNewChatIntro &&
+    hasActiveChatroom &&
     !isHistoryLoading &&
     chatMessages.length === 1 &&
     chatMessages[0]?.id === "assistant-greeting" &&
@@ -1001,7 +1058,77 @@ export function DocumentChatWidget({
                 width: "100%",
               }}
             >
-            {showEmptyState && (
+            {showNoChatroomPrompt && (
+              <div style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                textAlign: "center",
+                padding: "24px 16px",
+                gap: 16,
+              }}>
+                <BookIcon size={36} color={C.gold} />
+                <p style={{
+                  margin: 0,
+                  fontFamily: fontSerif,
+                  fontSize: 17,
+                  fontWeight: 700,
+                  color: C.navy,
+                  lineHeight: 1.35,
+                }}>
+                  Start a chatroom first
+                </p>
+                <p style={{
+                  margin: 0,
+                  fontFamily: fontBody,
+                  fontSize: 13,
+                  color: C.muted,
+                  maxWidth: 260,
+                  lineHeight: 1.55,
+                }}>
+                  Create a new chatroom or open an existing one from the menu before sending messages to the AI.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleNewChat}
+                  style={{
+                    fontFamily: fontBody,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    padding: "9px 18px",
+                    border: "none",
+                    borderRadius: 3,
+                    background: C.navy,
+                    color: C.paper,
+                    cursor: "pointer",
+                    letterSpacing: "0.04em",
+                  }}
+                >
+                  Create chatroom
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsSidebarOpen(true)}
+                  style={{
+                    fontFamily: fontBody,
+                    fontSize: 12,
+                    padding: 0,
+                    border: "none",
+                    background: "none",
+                    color: C.gold,
+                    cursor: "pointer",
+                    textDecoration: "underline",
+                    textUnderlineOffset: 2,
+                  }}
+                >
+                  Browse existing chatrooms
+                </button>
+              </div>
+            )}
+
+            {showGreetingEmpty && (
               <div style={{
                 flex: 1,
                 display: "flex",
@@ -1030,12 +1157,12 @@ export function DocumentChatWidget({
               </div>
             )}
 
-            {isHistoryLoading && (
+            {isHistoryLoading && chatMessages.length === 0 && (
               <p style={{ fontFamily: fontBody, fontSize: 13, color: C.muted, textAlign: "center" }}>
                 Loading history…
               </p>
             )}
-            {!isHistoryLoading && !showEmptyState && chatMessages.map(message => {
+            {!isHistoryLoading && !showNoChatroomPrompt && !showGreetingEmpty && chatMessages.map(message => {
               const isTypingMessage = assistantTyping?.messageId === message.id;
               const isAssistant = message.role === "assistant";
 
@@ -1107,7 +1234,7 @@ export function DocumentChatWidget({
             })}
 
             {/* "Consulting the archive…" loading state */}
-            {chatMutation.isPending && (
+            {hasActiveChatroom && chatMutation.isPending && (
               <p className="lib-consulting-text" style={{
                 fontFamily: fontBody, fontSize: 12, fontStyle: "italic",
                 color: C.muted, margin: 0, paddingLeft: 14,
@@ -1135,18 +1262,22 @@ export function DocumentChatWidget({
               value={chatInput}
               onChange={v => setChatInput(v)}
               onEnterSubmit={() => {
-                if (!inputEmpty && !isConversationRunning) {
+                if (!inputEmpty && !inputDisabled) {
                   const fakeEvent = { preventDefault: () => { } } as FormEvent<HTMLFormElement>;
                   submitChatMessage(fakeEvent);
                 }
               }}
-              placeholder="Ask about a manual or chapter…"
-              disabled={isConversationRunning}
+              placeholder={
+                hasActiveChatroom
+                  ? "Ask about a manual or chapter…"
+                  : "Create or select a chatroom to start…"
+              }
+              disabled={inputDisabled}
             />
             <button
               type={isConversationRunning ? "button" : "submit"}
               onClick={isConversationRunning ? stopConversation : undefined}
-              disabled={!isConversationRunning && inputEmpty}
+              disabled={!hasActiveChatroom || (!isConversationRunning && inputEmpty)}
               style={{
                 background: isConversationRunning
                   ? C.gold
@@ -1156,7 +1287,8 @@ export function DocumentChatWidget({
                 letterSpacing: "0.06em",
                 border: "none", borderRadius: 3,
                 padding: "7px 14px",
-                cursor: (!isConversationRunning && inputEmpty) ? "default" : "pointer",
+                cursor: (!hasActiveChatroom || (!isConversationRunning && inputEmpty)) ? "default" : "pointer",
+                opacity: !hasActiveChatroom ? 0.5 : 1,
                 transition: "background 200ms",
                 flexShrink: 0,
                 whiteSpace: "nowrap",
@@ -1184,10 +1316,12 @@ export function DocumentChatWidget({
           onChange={setCreateTitleInput}
           submitLabel="Create"
           isSubmitting={createChatMutation.isPending}
+          error={createChatError}
           onClose={() => {
             if (createChatMutation.isPending) return;
             setIsCreateModalOpen(false);
             setCreateTitleInput("");
+            setCreateChatError("");
           }}
           onSubmit={handleCreateChatSubmit}
         />
@@ -1207,6 +1341,21 @@ export function DocumentChatWidget({
             setRenameTitleInput("");
           }}
           onSubmit={handleRenameChatSubmit}
+        />
+      )}
+
+      {deleteTarget && (
+        <ChatConfirmDialog
+          heading="Delete chat"
+          description={`Delete "${deleteTarget.title}"? This conversation and its messages will be removed permanently.`}
+          confirmLabel="Delete"
+          isSubmitting={deleteChatMutation.isPending}
+          destructive
+          onClose={() => {
+            if (deleteChatMutation.isPending) return;
+            setDeleteTarget(null);
+          }}
+          onConfirm={handleConfirmDeleteChat}
         />
       )}
     </>
@@ -1290,6 +1439,7 @@ function ChatTitleDialog({
   onChange,
   submitLabel,
   isSubmitting,
+  error,
   onClose,
   onSubmit,
 }: {
@@ -1299,6 +1449,7 @@ function ChatTitleDialog({
   onChange: (value: string) => void;
   submitLabel: string;
   isSubmitting: boolean;
+  error?: string;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
@@ -1313,6 +1464,7 @@ function ChatTitleDialog({
       role="dialog"
       aria-modal="true"
       aria-labelledby="chat-title-dialog-heading"
+      data-chat-dialog
       style={{
         position: "fixed",
         inset: 0,
@@ -1351,6 +1503,17 @@ function ChatTitleDialog({
         >
           {heading}
         </h2>
+        {error ? (
+          <p style={{
+            margin: "0 0 12px",
+            fontFamily: fontBody,
+            fontSize: 12,
+            color: "#8b3a3a",
+            lineHeight: 1.45,
+          }}>
+            {error}
+          </p>
+        ) : null}
         <label
           htmlFor="chat-title-input"
           style={{ display: "block", fontSize: 12, color: C.muted, marginBottom: 6 }}
@@ -1417,6 +1580,122 @@ function ChatTitleDialog({
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+function ChatConfirmDialog({
+  heading,
+  description,
+  confirmLabel,
+  isSubmitting,
+  destructive = false,
+  onClose,
+  onConfirm,
+}: {
+  heading: string;
+  description: string;
+  confirmLabel: string;
+  isSubmitting: boolean;
+  destructive?: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="chat-confirm-dialog-heading"
+      aria-describedby="chat-confirm-dialog-description"
+      data-chat-dialog
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 100,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "rgba(26,39,68,0.45)",
+        padding: 16,
+      }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(event) => event.stopPropagation()}
+        style={{
+          width: "100%",
+          maxWidth: 320,
+          background: C.paper,
+          border: `1px solid ${C.border}`,
+          borderRadius: 6,
+          boxShadow: "0 16px 48px rgba(0,0,0,0.2)",
+          padding: "18px 20px",
+          fontFamily: fontBody,
+        }}
+      >
+        <h2
+          id="chat-confirm-dialog-heading"
+          style={{
+            margin: "0 0 10px",
+            fontFamily: fontSerif,
+            fontSize: 17,
+            fontWeight: 700,
+            color: C.navy,
+          }}
+        >
+          {heading}
+        </h2>
+        <p
+          id="chat-confirm-dialog-description"
+          style={{
+            margin: "0 0 18px",
+            fontFamily: fontBody,
+            fontSize: 13,
+            color: C.muted,
+            lineHeight: 1.55,
+          }}
+        >
+          {description}
+        </p>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSubmitting}
+            style={{
+              fontFamily: fontBody,
+              fontSize: 12,
+              padding: "7px 14px",
+              border: `1px solid ${C.border}`,
+              borderRadius: 3,
+              background: "white",
+              color: C.navy,
+              cursor: isSubmitting ? "not-allowed" : "pointer",
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isSubmitting}
+            style={{
+              fontFamily: fontBody,
+              fontSize: 12,
+              fontWeight: 600,
+              padding: "7px 14px",
+              border: "none",
+              borderRadius: 3,
+              background: destructive ? "#8b3a3a" : C.navy,
+              color: C.paper,
+              cursor: isSubmitting ? "not-allowed" : "pointer",
+              opacity: isSubmitting ? 0.6 : 1,
+            }}
+          >
+            {isSubmitting ? `${confirmLabel}…` : confirmLabel}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1678,8 +1957,12 @@ function historyToChatMessages(
   messages: ChatHistoryMessage[],
   folderId: string,
   contextLabel?: string,
+  options?: { emptyGreeting?: boolean },
 ): ChatMessage[] {
   if (messages.length === 0) {
+    if (options?.emptyGreeting === false) {
+      return [];
+    }
     return [{
       id: "assistant-greeting",
       role: "assistant",
