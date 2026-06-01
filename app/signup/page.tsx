@@ -309,7 +309,7 @@ export default function SignUpPage() {
               Ministry of Works &amp; Transport
             </p>
             <h1 style={{
-              fontFamily: fontSerif, fontSize: 24, fontWeight: 700,
+              fontFamily: fontSerif, fontSize: 36, fontWeight: 700,
               color: "white", lineHeight: 1.2, marginBottom: 0,
             }}>
               Expressway<br />Integrated Manual

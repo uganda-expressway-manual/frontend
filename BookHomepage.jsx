@@ -12,23 +12,19 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 /** Content aligned with 20260510_매뉴얼의 정의_PM.pptx (Integration Manual overview + eight volumes). */
 const SECTIONS = [
   {
-    icon: '🗺️',
-    chapter: 'Manual 1',
     title: 'Planning Manual',
     desc:
-      'This volume addresses road planning, traffic demand, highway capacity, level of service, and economic feasibility analysis for expressway programs. It establishes the analytical basis for corridor decisions and project justification.',
+      'This volume addresses road planning, traffic demand, expressway capacity, level of service, and economic feasibility analysis for expressway programs. It establishes the analytical basis for corridor decisions and project justification.',
     bullets: [
       'Introduction and Scope',
       'Road Planning and Traffic Demand',
-      'Highway Capacity and Level of Service (LOS)',
+      'Expressway Capacity and Level of Service (LOS)',
       'Technical and Geometric Considerations',
       'Economic Feasibility Analysis',
       'Environmental and Social Considerations',
     ],
   },
   {
-    icon: '📐',
-    chapter: 'Manual 2',
     title: 'Design Manual',
     desc:
       'This volume sets out design requirements for expressway projects across technical, geometric, economic, and environmental dimensions. Safety, environmental protection, and efficient vehicle operation are central to every design decision.',
@@ -43,8 +39,6 @@ const SECTIONS = [
     ],
   },
   {
-    icon: '🏗️',
-    chapter: 'Manual 3',
     title: 'Construction Management Manual',
     desc:
       'This volume covers safety, environmental compliance, quality, cost, scheduling, and related controls for expressway construction projects. It equips construction managers with the procedures needed to deliver works effectively and in line with project objectives.',
@@ -66,8 +60,6 @@ const SECTIONS = [
     ],
   },
   {
-    icon: '📋',
-    chapter: 'Manual 4',
     title: 'Construction Specification',
     desc:
       'This volume defines construction standards for expressway civil engineering works, ancillary facilities, and comparable unit works. Its series specifications support tendering, contracting, and field execution across all major work categories.',
@@ -95,8 +87,6 @@ const SECTIONS = [
     ],
   },
   {
-    icon: '🚦',
-    chapter: 'Manual 5',
     title: 'Operation Manual',
     desc:
       'This volume addresses traffic management, incident response, facility upkeep, and customer-facing operations on expressways. Operators will find the procedures and reference material required to run the network safely and reliably.',
@@ -109,8 +99,6 @@ const SECTIONS = [
     ],
   },
   {
-    icon: '🔧',
-    chapter: 'Manual 6',
     title: 'Maintenance Manual',
     desc:
       'This volume defines inspection, condition assessment, and maintenance procedures for expressway assets. Standard methods support safe, efficient upkeep of pavements, structures, drainage, tunnels, and roadside installations.',
@@ -124,8 +112,6 @@ const SECTIONS = [
     ],
   },
   {
-    icon: '🤝',
-    chapter: 'Manual 7',
     title: 'PPP Feasibility Review Guideline',
     desc:
       'This volume advises the Government of Uganda on implementing expressway projects through Public-Private Partnerships (PPPs). It addresses legal, institutional, technical, and financial considerations together with implementation strategy.',
@@ -139,8 +125,6 @@ const SECTIONS = [
     ],
   },
   {
-    icon: '🌉',
-    chapter: 'Manual 8',
     title: 'BMS User Manual',
     desc:
       "This volume documents the Expressway Bridge Management System (BMS) used to record bridge data and inform maintenance decisions on Uganda's expressways. Integrated lifecycle data supports structural safety and more efficient maintenance planning.",
@@ -182,6 +166,14 @@ const C = {
 const fontSerif = "'Source Serif 4', Georgia, serif";
 const fontDisplay = "'Playfair Display', 'Times New Roman', serif";
 
+/** In-book page copy (TOC, spreads, login, cover hint) — multiply legacy px sizes by this factor. */
+const CONTENT_TEXT_SCALE = 1.3;
+const fs = (px) => px * CONTENT_TEXT_SCALE;
+
+/** Topic list under “Covered in this section” (chapter / volume lines and sub-items). */
+const COVERED_CHAPTER_TEXT_SCALE = 1.2;
+const fsc = (px) => px * COVERED_CHAPTER_TEXT_SCALE;
+
 // ─── Timing constants ─────────────────────────────────────────────────────────
 
 const LAST_SPREAD = SECTIONS.length + 1; // 0=toc+welcome, 1–8=manuals, 9=login
@@ -206,22 +198,51 @@ const BOOK_LAYOUT_VARS = {
 const BOOK_PAGE_H = 'var(--book-page-h)';
 const BOOK_SPREAD_W = 'var(--book-spread-w)';
 
+/** “Covered in this section” lines that name a volume (chapter headings). */
+const COVERED_VOLUME_COLOR = '#000000';
+const VOLUME_CHAPTER_RE = /(Volume\s*\d+\s*:)/gi;
+
+function hasVolumeChapter(text) {
+  return Boolean(text && /volume/i.test(text));
+}
+
+function coveredBulletRowStyle(text) {
+  const row = { ...styles.bulletRow, fontSize: fsc(12.5) };
+  return hasVolumeChapter(text)
+    ? { ...row, color: COVERED_VOLUME_COLOR }
+    : row;
+}
+
+function renderCoveredSectionText(text) {
+  if (!hasVolumeChapter(text)) return text;
+  const parts = text.split(VOLUME_CHAPTER_RE);
+  return parts.map((part, i) =>
+    /^Volume\s*\d+\s*:$/i.test(part) ? (
+      <strong key={`${part}-${i}`} style={{ fontWeight: 700, color: COVERED_VOLUME_COLOR }}>
+        {part}
+      </strong>
+    ) : (
+      part
+    )
+  );
+}
+
 // ─── Content components ───────────────────────────────────────────────────────
 
 function TocLeftContent() {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
       <div style={styles.pageHeader}>Uganda Expressway Integrated Manual</div>
-      <div style={{ fontFamily: fontDisplay, fontSize: 22, fontWeight: 700, color: C.navy, marginBottom: 6 }}>
+      <div style={{ fontFamily: fontDisplay, fontSize: fs(22), fontWeight: 700, color: C.navy, marginBottom: 6 }}>
         Table of Contents
       </div>
-      <div style={{ fontFamily: fontSerif, fontSize: 12, color: C.textMuted, fontStyle: 'italic', marginBottom: 24 }}>
-        Eight integrated manuals covering the full lifecycle
+      <div style={{ fontFamily: fontSerif, fontSize: fs(12), color: C.textMuted, fontStyle: 'italic', marginBottom: 24 }}>
+        Integrated manuals covering the full lifecycle
       </div>
       {TOC_ENTRIES.map((e) => (
         <div key={e.num} style={styles.tocEntry}>
-          <span style={{ fontFamily: fontDisplay, fontSize: 11, color: C.gold, fontWeight: 700, minWidth: 18, marginTop: 2 }}>{e.num}</span>
-          <span style={{ fontFamily: fontSerif, fontSize: 14, color: C.navy }}>{e.name}</span>
+          <span style={{ fontFamily: fontDisplay, fontSize: fs(11), color: C.gold, fontWeight: 700, minWidth: fs(18), marginTop: 2 }}>{e.num}</span>
+          <span style={{ fontFamily: fontSerif, fontSize: fs(14), color: C.navy }}>{e.name}</span>
         </div>
       ))}
     </div>
@@ -232,19 +253,19 @@ function WelcomeRightContent() {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
       <div style={styles.pageHeader}>Welcome</div>
-      <div style={{ fontFamily: fontDisplay, fontSize: 18, fontWeight: 700, color: C.navy, marginBottom: 10, lineHeight: 1.3 }}>
+      <div style={{ fontFamily: fontDisplay, fontSize: fs(18), fontWeight: 700, color: C.navy, marginBottom: 10, lineHeight: 1.3 }}>
         What is the Expressway Integration Manual?
       </div>
       <div style={{ width: 32, height: 1.5, background: C.gold, marginBottom: 16 }} />
-      <div style={{ fontFamily: fontSerif, fontSize: 13.5, color: C.textDark, lineHeight: 1.75, marginBottom: 20 }}>
+      <div style={{ fontFamily: fontSerif, fontSize: fs(13.5), color: C.textDark, lineHeight: 1.75, marginBottom: 20 }}>
         The Expressway Integration Manual is a comprehensive reference for managing the full expressway lifecycle—planning,
         design, construction management, operation, and maintenance.<br /><br />
         It provides sector managers with an integrated framework for planning and overseeing expressway programs.
         The manual supports consistent, systematic delivery from initial planning through long-term maintenance.<br /><br />
         Browse the sections to explore each volume. Log in to access the full content.
       </div>
-      <div style={{ padding: 14, background: 'rgba(201,124,42,0.07)', borderLeft: `2px solid ${C.gold}`, borderRadius: '0 4px 4px 0' }}>
-        <div style={{ fontFamily: fontSerif, fontSize: 12, color: '#7a5a20', lineHeight: 1.6 }}>
+      <div style={{ padding: 14, background: 'rgba(201,124,42,0.07)', borderRadius: '0 4px 4px 0' }}>
+        <div style={{ fontFamily: fontSerif, fontSize: fs(12), color: '#7a5a20', lineHeight: 1.6 }}>
           Click the <strong>right page</strong> to begin browsing →
         </div>
       </div>
@@ -255,16 +276,15 @@ function WelcomeRightContent() {
 function SectionLeftContent({ section }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-      <div style={styles.pageHeader}>{section.chapter} · Uganda Expressway Integrated Manual</div>
-      <div style={{ fontSize: 28, marginBottom: 12 }}>{section.icon}</div>
-      <div style={{ fontFamily: fontSerif, fontSize: 9.5, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.gold, marginBottom: 8 }}>
+      <div style={styles.pageHeader}>{section.chapter} Uganda Expressway Integrated Manual</div>
+      <div style={{ fontFamily: fontSerif, fontSize: fs(9.5), letterSpacing: '0.2em', textTransform: 'uppercase', color: C.gold, marginBottom: 8 }}>
         {section.chapter}
       </div>
-      <div style={{ fontFamily: fontDisplay, fontSize: 26, fontWeight: 700, color: C.navy, marginBottom: 14, lineHeight: 1.2 }}>
+      <div style={{ fontFamily: fontDisplay, fontSize: fs(26), fontWeight: 700, color: C.navy, marginBottom: 14, lineHeight: 1.2 }}>
         {section.title}
       </div>
       <div style={{ width: 32, height: 1.5, background: C.gold, marginBottom: 16 }} />
-      <div style={{ fontFamily: fontSerif, fontSize: 14, color: C.textDark, lineHeight: 1.75 }}>
+      <div style={{ fontFamily: fontSerif, fontSize: fs(14), color: C.textDark, lineHeight: 1.75 }}>
         {section.desc}
       </div>
     </div>
@@ -275,26 +295,28 @@ function SectionRightContent({ section }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
       <div style={styles.pageHeader}>Key Topics</div>
-      <div style={{ fontFamily: fontDisplay, fontSize: 14, color: C.textMuted, marginBottom: 14, fontStyle: 'italic' }}>
+      <div style={{ fontFamily: fontDisplay, fontSize: fs(14), fontWeight: 700, color: C.textMuted, marginBottom: 14 }}>
         Covered in this section:
       </div>
       <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
         {section.bullets.map((entry) => {
           if (typeof entry === 'string') {
             return (
-              <li key={entry} style={styles.bulletRow}>
-                <span style={{ color: C.gold, flexShrink: 0 }}>—</span>{entry}
+              <li key={entry} style={coveredBulletRowStyle(entry)}>
+                <span style={{ color: C.gold, flexShrink: 0 }}>—</span>
+                {renderCoveredSectionText(entry)}
               </li>
             );
           }
           return (
-            <li key={entry.title} style={{ borderBottom: `0.5px dotted ${C.paperDot}` }}>
-              <div style={{ ...styles.bulletRow, borderBottom: 'none', fontWeight: 600, color: C.navy }}>
-                <span style={{ color: C.gold, flexShrink: 0 }}>—</span>{entry.title}
+            <li key={entry.title}>
+              <div style={coveredBulletRowStyle(entry.title)}>
+                <span style={{ color: C.gold, flexShrink: 0 }}>—</span>
+                {renderCoveredSectionText(entry.title)}
               </div>
               <ul style={{ listStyle: 'none', padding: '0 0 4px 18px', margin: 0 }}>
                 {entry.items.map((item) => (
-                  <li key={item} style={{ ...styles.bulletRow, fontSize: 11.5, padding: '4px 0' }}>
+                  <li key={item} style={{ ...styles.bulletRow, fontSize: fsc(11.5), padding: '4px 0' }}>
                     <span style={{ color: C.textMuted, flexShrink: 0 }}>·</span>{item}
                   </li>
                 ))}
@@ -318,9 +340,8 @@ function LoginLeftContent({ onLoginClick }) {
       textAlign: 'center', padding: 20,
       height: '100%', minHeight: 0, boxSizing: 'border-box',
     }}>
-      <div style={{ fontSize: 36, marginBottom: 14, opacity: 0.6 }}>🔐</div>
-      <div style={{ fontFamily: fontDisplay, fontSize: 18, fontWeight: 700, color: C.navy, marginBottom: 8 }}>Ready to dive deeper?</div>
-      <div style={{ fontFamily: fontSerif, fontSize: 13, color: C.textMid, lineHeight: 1.6, marginBottom: 20 }}>
+      <div style={{ fontFamily: fontDisplay, fontSize: fs(18), fontWeight: 700, color: C.navy, marginBottom: 8 }}>Ready to dive deeper?</div>
+      <div style={{ fontFamily: fontSerif, fontSize: fs(13), color: C.textMid, lineHeight: 1.6, marginBottom: 20 }}>
         You&apos;ve seen the full structure of the Uganda Expressway Integration Manual and its eight volumes.
         Log in to access the complete reference documentation, detailed specifications, and all annexes.
       </div>
@@ -332,7 +353,7 @@ function LoginLeftContent({ onLoginClick }) {
           onLoginClick();
         }}
         style={{
-          background: C.navy, color: '#fff', fontFamily: fontSerif, fontSize: 13, letterSpacing: '0.08em',
+          background: C.navy, color: '#fff', fontFamily: fontSerif, fontSize: fs(13), letterSpacing: '0.08em',
           border: 'none', borderRadius: 4, padding: '10px 24px', cursor: 'pointer', pointerEvents: 'auto',
         }}
         onMouseEnter={(e) => (e.currentTarget.style.background = C.gold)}
@@ -349,13 +370,13 @@ function LoginRightContent() {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
       <div style={styles.pageHeader}>Access</div>
-      <div style={{ fontFamily: fontSerif, fontSize: 13, color: C.textMuted, fontStyle: 'italic', lineHeight: 1.6, marginBottom: 16 }}>
+      <div style={{ fontFamily: fontSerif, fontSize: fs(13), color: C.textMuted, fontStyle: 'italic', lineHeight: 1.6, marginBottom: 16 }}>
         This manual is available to registered users of the Uganda Ministry of Works &amp; Transport expressway management portal.
       </div>
-      <div style={{ borderTop: `0.5px solid ${C.paperBorder}`, paddingTop: 14 }}>
-        <div style={{ fontFamily: fontDisplay, fontSize: 13, color: C.navy, marginBottom: 8 }}>Supported by:</div>
+      <div style={{ paddingTop: 14 }}>
+        <div style={{ fontFamily: fontDisplay, fontSize: fs(13), color: C.navy, marginBottom: 8 }}>Supported by:</div>
         {supporters.map((s) => (
-          <div key={s} style={{ fontFamily: fontSerif, fontSize: 12, color: C.textMid, padding: '5px 0', borderBottom: `0.5px dotted ${C.paperDot}` }}>{s}</div>
+          <div key={s} style={{ fontFamily: fontSerif, fontSize: fs(12), color: C.textMid, padding: '5px 0' }}>{s}</div>
         ))}
       </div>
     </div>
@@ -366,13 +387,13 @@ function LoginRightContent() {
 
 const styles = {
   pageHeader: {
-    fontFamily: fontSerif, fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase',
+    fontFamily: fontSerif, fontSize: fs(9), letterSpacing: '0.2em', textTransform: 'uppercase',
     color: C.textMuted, paddingBottom: 10, borderBottom: `0.5px solid ${C.paperBorder}`, marginBottom: 24,
   },
-  tocEntry: { display: 'flex', alignItems: 'flex-start', padding: '10px 0', borderBottom: `0.5px solid #e8e0d0`, gap: 14 },
+  tocEntry: { display: 'flex', alignItems: 'flex-start', padding: '10px 0', gap: 14 },
   bulletRow: {
-    fontFamily: fontSerif, fontSize: 12.5, color: '#5a4a30', padding: '6px 0',
-    borderBottom: `0.5px dotted ${C.paperDot}`, display: 'flex', alignItems: 'flex-start', gap: 8,
+    fontFamily: fontSerif, fontSize: fs(12.5), color: '#5a4a30', padding: '6px 0',
+    display: 'flex', alignItems: 'flex-start', gap: 8,
   },
   page: {
     flex: 1,
@@ -387,7 +408,6 @@ const styles = {
   },
   pageTexture: {
     position: 'absolute', inset: 0, pointerEvents: 'none',
-    backgroundImage: 'repeating-linear-gradient(0deg,transparent,transparent 24px,rgba(180,160,120,0.07) 24px,rgba(180,160,120,0.07) 25px)',
     borderRadius: 'inherit',
   },
   /* minHeight: 0 is critical — without it a flex child grows to content size,
@@ -405,7 +425,7 @@ const styles = {
     overflowY: 'auto',
     WebkitOverflowScrolling: 'touch',
   },
-  pageFooter: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 28px', borderTop: `0.5px solid ${C.paperBorder}`, position: 'relative', zIndex: 1 },
+  pageFooter: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 28px', position: 'relative', zIndex: 1 },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -496,7 +516,7 @@ function BookCover({ onClick, tiltEnabled = true }) {
       <div aria-hidden style={{
         position: 'absolute', left: '50%', bottom: 18,
         transform: 'translateX(-50%)',
-        fontFamily: fontSerif, fontSize: 12, letterSpacing: '0.06em',
+        fontFamily: fontSerif, fontSize: fs(12), letterSpacing: '0.06em',
         color: 'rgba(58,48,32,0.72)',
         background: 'rgba(255,255,255,0.86)',
         border: `1px solid ${C.paperBorder}`,
@@ -570,11 +590,11 @@ function PageRight({ children, onClick, cursor = 'default', style }) {
   );
 }
 
-/* Spine is now shadow-only — no visible thick divider */
+/* Center crease — shadow only, no visible divider line */
 function Spine() {
   return (
     <div style={{
-      width: 2, flexShrink: 0, background: C.paperBorder, zIndex: 2,
+      width: 2, flexShrink: 0, background: 'transparent', zIndex: 2,
       boxShadow: '3px 0 10px rgba(0,0,0,0.13), -3px 0 10px rgba(0,0,0,0.10)',
     }} />
   );

@@ -809,7 +809,13 @@ function parseChatMessageRole(value: unknown): "user" | "assistant" | null {
   if (normalized === "user" || normalized === "human") {
     return "user";
   }
-  if (normalized === "assistant" || normalized === "ai" || normalized === "bot" || normalized === "model") {
+  if (
+    normalized === "assistant" ||
+    normalized === "ai" ||
+    normalized === "bot" ||
+    normalized === "model" ||
+    normalized === "system"
+  ) {
     return "assistant";
   }
   return null;
@@ -820,7 +826,7 @@ function parseChatHistoryMessage(entry: unknown, index: number): ChatHistoryMess
     return null;
   }
   const o = entry as Record<string, unknown>;
-  const role = parseChatMessageRole(o.role ?? o.sender ?? o.type);
+  const role = parseChatMessageRole(o.role ?? o.from ?? o.sender ?? o.type);
   const content =
     (typeof o.text === "string" && o.text) ||
     (typeof o.content === "string" && o.content) ||

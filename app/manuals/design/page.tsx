@@ -26,7 +26,7 @@ export default function DesignManualPage() {
         <>
           <p>
             The Design Manual codifies expressway-specific design rules — geometric, pavement, structural, drainage,
-            geotechnical, and tunnel/ITS — so designers do not rely on adapted general-highway documents.
+            geotechnical, and tunnel/ITS — so designers do not rely on adapted general-expressway documents.
           </p>
           <p>
             Each chapter begins with the Uganda regulatory context, then specifies design inputs, computation methods,

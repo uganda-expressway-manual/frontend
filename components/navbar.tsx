@@ -10,22 +10,22 @@ import { formatUserRoleLabel, isAdminUser } from "@/lib/auth-user";
 import { useAuth } from "@/lib/hooks/use-auth";
 
 const fontSerif = "'Playfair Display', Georgia, serif";
-const fontBody  = "'Source Serif 4', 'Georgia', serif";
+const fontBody = "'Source Serif 4', 'Georgia', serif";
 
 const C = {
-  navy:   "#1a2744",
-  gold:   "#c97c2a",
-  paper:  "#faf8f3",
+  navy: "#1a2744",
+  gold: "#c97c2a",
+  paper: "#faf8f3",
   border: "#d0c4aa",
-  muted:  "#a07848",
+  muted: "#a07848",
 };
 
 export function Navbar() {
-  const router          = useRouter();
-  const auth            = useAuth();
-  const { user }        = auth;
-  const canManageUsers  = isAdminUser(user);
-  const username        =
+  const router = useRouter();
+  const auth = useAuth();
+  const { user } = auth;
+  const canManageUsers = isAdminUser(user);
+  const username =
     user?.username?.trim() ||
     user?.email?.split("@")[0]?.trim() ||
     "User";

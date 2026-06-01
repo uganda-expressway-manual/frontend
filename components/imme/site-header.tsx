@@ -10,9 +10,26 @@ import { IMME_TEAM_EMAILS } from "@/lib/imme/project";
 const contactBtnClass =
   "inline-flex items-center justify-center rounded-full border border-imme-line bg-white px-3 py-1.5 text-xs font-semibold text-imme-navy transition hover:bg-imme-concrete sm:px-4 sm:text-[13px]";
 
+const CONTACT_PANEL_FADE_MS = 200;
+
 function ContactPopoverButton({ onNavigate }: { onNavigate?: () => void }) {
   const [open, setOpen] = useState(false);
+  const [panelMounted, setPanelMounted] = useState(false);
+  const [panelVisible, setPanelVisible] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (open) {
+      setPanelMounted(true);
+      const raf = requestAnimationFrame(() => {
+        requestAnimationFrame(() => setPanelVisible(true));
+      });
+      return () => cancelAnimationFrame(raf);
+    }
+    setPanelVisible(false);
+    const timer = window.setTimeout(() => setPanelMounted(false), CONTACT_PANEL_FADE_MS);
+    return () => window.clearTimeout(timer);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -44,12 +61,17 @@ function ContactPopoverButton({ onNavigate }: { onNavigate?: () => void }) {
       >
         Contact
       </button>
-      {open ? (
+      {panelMounted ? (
         <div
           id="site-header-contact-panel"
           role="region"
           aria-labelledby="site-header-contact-trigger"
-          className="absolute right-0 top-full z-[60] mt-2 w-[min(calc(100vw-24px),18rem)] rounded-imme border border-imme-line bg-white px-3 py-3 text-left shadow-imme-card"
+          aria-hidden={!panelVisible}
+          className={[
+            "absolute right-0 top-full z-[60] mt-2 w-[min(calc(100vw-24px),18rem)] rounded-imme border border-imme-line bg-white px-3 py-3 text-left shadow-imme-card",
+            "transition-opacity duration-200 ease-out",
+            panelVisible ? "opacity-100" : "pointer-events-none opacity-0",
+          ].join(" ")}
         >
           <p className="font-serif text-[12px] leading-relaxed text-imme-navy">
             <span className="font-semibold">{IMME_TEAM_EMAILS.developer.role}: </span>

@@ -41,7 +41,7 @@ export default function ConstructionManagementManualPage() {
         <>
           <p>
             Expressway-grade quality control on tunnels, structures, and pavement requires procedures more rigorous
-            than general highway works. Localizing these for Uganda reduces re-work and contract disputes during
+            than general expressway works. Localizing these for Uganda reduces re-work and contract disputes during
             major projects such as KEE expansion.
           </p>
         </>

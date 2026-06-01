@@ -173,7 +173,7 @@ export default function LoginPage() {
               Ministry of Works &amp; Transport
             </p>
             <h1 style={{
-              fontFamily: fontSerif, fontSize: 22, fontWeight: 700,
+              fontFamily: fontSerif, fontSize: 33, fontWeight: 700,
               color: "white", lineHeight: 1.25, marginBottom: 14,
             }}>
               Expressway Integrated Manual

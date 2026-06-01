@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, ReactNode, useState, useRef, useEffect, useMemo } from "react";
+import { Fragment, ReactNode, useState, useRef, useEffect, useLayoutEffect, useMemo } from "react";
 import { DragEvent, MutableRefObject } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useDebounce } from "use-debounce";
@@ -15,15 +15,15 @@ import { Folder } from "@/lib/types";
 
 /* ── Design tokens (matches BookHomepage.jsx) ── */
 const fontSerif = "'Playfair Display', Georgia, serif";
-const fontBody  = "'Source Serif 4', Georgia, serif";
+const fontBody = "'Source Serif 4', Georgia, serif";
 const C = {
-  navy:    "#1a2744",
-  gold:    "#c97c2a",
-  paper:   "#faf8f3",
-  bg:      "#f4f1ec",
-  border:  "#d0c4aa",
-  muted:   "#a07848",
-  spine:   "#f0e8d8", // page-edge cream
+  navy: "#1a2744",
+  gold: "#c97c2a",
+  paper: "#faf8f3",
+  bg: "#f4f1ec",
+  border: "#d0c4aa",
+  muted: "#a07848",
+  spine: "#f0e8d8", // page-edge cream
 };
 
 const BOOKS_PER_SHELF = 5;
@@ -47,28 +47,28 @@ interface GlobalFindItem {
    FolderBrowser (top-level export — data & state unchanged)
 ═══════════════════════════════════════════════════════════════ */
 export function FolderBrowser() {
-  const queryClient   = useQueryClient();
-  const pathname      = usePathname();
-  const router        = useRouter();
-  const searchParams  = useSearchParams();
-  const { user }      = useAuth();
-  const admin         = isAdminUser(user);
-  const urlKeyword    = searchParams.get("keyword") ?? "";
+  const queryClient = useQueryClient();
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { user } = useAuth();
+  const admin = isAdminUser(user);
+  const urlKeyword = searchParams.get("keyword") ?? "";
 
-  const [globalSearch,      setGlobalSearch]      = useState(urlKeyword);
-  const [newFolderName,     setNewFolderName]      = useState("");
-  const [newFolderLock,     setNewFolderLock]      = useState(false);
-  const [showCreateFolder,  setShowCreateFolder]   = useState(false);
-  const [editingFolderId,   setEditingFolderId]    = useState<string | null>(null);
-  const [folderNameDraft,   setFolderNameDraft]    = useState("");
-  const [folderLockDraft,   setFolderLockDraft]    = useState(false);
-  const [orderedFolders,    setOrderedFolders]     = useState<Folder[]>([]);
-  const [draggedFolderId,   setDraggedFolderId]    = useState<string | null>(null);
-  const [dragOverFolderId,  setDragOverFolderId]   = useState<string | null>(null);
-  const [lockedModal,       setLockedModal]        = useState<string | null>(null);
-  const [deleteConfirm,      setDeleteConfirm]      = useState<{ id: string; name: string } | null>(null);
-  const orderedFoldersRef   = useRef<Folder[]>([]);
-  const folderDragGhostRef  = useRef<HTMLDivElement | null>(null);
+  const [globalSearch, setGlobalSearch] = useState(urlKeyword);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [newFolderLock, setNewFolderLock] = useState(false);
+  const [showCreateFolder, setShowCreateFolder] = useState(false);
+  const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
+  const [folderNameDraft, setFolderNameDraft] = useState("");
+  const [folderLockDraft, setFolderLockDraft] = useState(false);
+  const [orderedFolders, setOrderedFolders] = useState<Folder[]>([]);
+  const [draggedFolderId, setDraggedFolderId] = useState<string | null>(null);
+  const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
+  const [lockedModal, setLockedModal] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
+  const orderedFoldersRef = useRef<Folder[]>([]);
+  const folderDragGhostRef = useRef<HTMLDivElement | null>(null);
   const folderDragPointerOffsetRef = useRef({ x: 0, y: 0 });
 
   const [debouncedGlobalSearch] = useDebounce(globalSearch, 300);
@@ -111,8 +111,8 @@ export function FolderBrowser() {
   const saveFolderOrdersMutation = useMutation({
     mutationFn: async (orders: { folderId: string; order: number }[]) =>
       api.patch("/folders/order", { orders }),
-    onSuccess:  () => { void queryClient.invalidateQueries({ queryKey: ["folders"] }); },
-    onError:    () => { void queryClient.invalidateQueries({ queryKey: ["folders"] }); },
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["folders"] }); },
+    onError: () => { void queryClient.invalidateQueries({ queryKey: ["folders"] }); },
   });
 
   const serverFolderListSignature = useMemo(
@@ -140,7 +140,7 @@ export function FolderBrowser() {
     const t = debouncedGlobalSearch.trim();
     if (t) params.set("keyword", t); else params.delete("keyword");
     const currentQ = searchParams.toString();
-    const nextQ    = params.toString();
+    const nextQ = params.toString();
     if (currentQ !== nextQ) {
       router.replace(nextQ ? `${pathname}?${nextQ}` : pathname, { scroll: false });
     }
@@ -202,13 +202,13 @@ export function FolderBrowser() {
               }}
               onFocus={e => {
                 e.currentTarget.style.borderColor = C.gold;
-                e.currentTarget.style.boxShadow  = "0 0 0 3px rgba(201,124,42,0.12)";
-                e.currentTarget.style.fontStyle   = "normal";
+                e.currentTarget.style.boxShadow = "0 0 0 3px rgba(201,124,42,0.12)";
+                e.currentTarget.style.fontStyle = "normal";
               }}
               onBlur={e => {
                 e.currentTarget.style.borderColor = C.border;
-                e.currentTarget.style.boxShadow   = "none";
-                e.currentTarget.style.fontStyle   = globalSearch ? "normal" : "italic";
+                e.currentTarget.style.boxShadow = "none";
+                e.currentTarget.style.fontStyle = globalSearch ? "normal" : "italic";
               }}
             />
           </div>
@@ -254,8 +254,10 @@ export function FolderBrowser() {
                   background: "white", color: C.navy, outline: "none",
                 }}
               />
-              <label style={{ display: "flex", alignItems: "center", gap: 8,
-                fontFamily: fontBody, fontSize: 13, color: C.navy, cursor: "pointer" }}>
+              <label style={{
+                display: "flex", alignItems: "center", gap: 8,
+                fontFamily: fontBody, fontSize: 13, color: C.navy, cursor: "pointer"
+              }}>
                 <input
                   type="checkbox" checked={newFolderLock}
                   onChange={e => setNewFolderLock(e.target.checked)}
@@ -345,7 +347,7 @@ export function FolderBrowser() {
             if (!ghost || (event.clientX === 0 && event.clientY === 0)) return;
             const { x, y } = folderDragPointerOffsetRef.current;
             ghost.style.left = `${event.clientX - x}px`;
-            ghost.style.top  = `${event.clientY - y}px`;
+            ghost.style.top = `${event.clientY - y}px`;
           }}
           onDragEnd={() => {
             folderDragGhostRef.current?.remove(); folderDragGhostRef.current = null;
@@ -554,8 +556,8 @@ function Shelf({
   onDragStart, onDrag, onDragEnd, onDragOver, onDragLeave, onDrop,
 }: ShelfProps) {
   const router = useRouter();
-  const [hoveredId,  setHoveredId]  = useState<string | null>(null);
-  const [pullingId,  setPullingId]  = useState<string | null>(null); // "pull off shelf" exit anim
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [pullingId, setPullingId] = useState<string | null>(null); // "pull off shelf" exit anim
 
   const handleBookClick = (folder: Folder) => {
     if (folder.lock && !admin) { onOpenLocked(folder.id); return; }
@@ -572,17 +574,17 @@ function Shelf({
         background: C.bg,
         borderRadius: "6px 6px 0 0",
         padding: "24px 24px 0",
-        display: "flex", alignItems: "flex-end", gap: 6,
+        display: "flex", alignItems: "flex-end", gap: 12,
         flexWrap: "wrap",
-        minHeight: 260,
+        minHeight: 520,
         position: "relative",
         /* vertical woodgrain */
         backgroundImage:
           "repeating-linear-gradient(90deg, transparent, transparent 48px, rgba(0,0,0,0.018) 48px, rgba(0,0,0,0.018) 49px)",
       }}>
         {folders.map((folder, idx) => {
-          const absIdx   = globalStartIndex + idx;
-          const color    = resolveShelfSpineColor(folder);
+          const absIdx = globalStartIndex + idx;
+          const color = resolveShelfSpineColor(folder);
           const isLocked = !!folder.lock && !admin;
           const isHovered = hoveredId === folder.id && !pullingId;
           const isPulling = pullingId === folder.id;
@@ -639,13 +641,19 @@ function Shelf({
 
       {/* Wooden shelf board */}
       <div style={{
-        height: 18, borderRadius: "0 0 4px 4px",
+        height: 36, borderRadius: "0 0 4px 4px",
         background: "linear-gradient(180deg,#c8a87a 0%,#a07848 40%,#8a6030 100%)",
         boxShadow: "0 4px 12px rgba(0,0,0,0.25), inset 0 -2px 4px rgba(0,0,0,0.15)",
       }} />
     </div>
   );
 }
+
+const BOOK_SPINE_MIN_W = 152;
+const BOOK_SPINE_H = 440;
+const BOOK_SPINE_EDGE_W = 18;
+const BOOK_SPINE_TITLE_PAD = 140;
+const SPINE_BRAND_LABEL = "Expressway";
 
 /* ═══════════════════════════════════════════════════════════════
    BookSpine — single book on the shelf
@@ -676,16 +684,29 @@ function BookSpine({
 }: BookSpineProps) {
   /* Detect touch device to replace hover→tap scale */
   const [isTouch, setIsTouch] = useState(false);
+  const [spineWidth, setSpineWidth] = useState(BOOK_SPINE_MIN_W);
+  const titleMeasureRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => { setIsTouch(window.matchMedia("(hover: none)").matches); }, []);
 
-  const W = 76; // spine width
-  const H = 220; // spine height
+  const titleFontSize = folder.foldername.length > 20 ? 20 : 24;
+  const titleMaxAlong = BOOK_SPINE_H - BOOK_SPINE_TITLE_PAD;
+
+  useLayoutEffect(() => {
+    const el = titleMeasureRef.current;
+    if (!el) return;
+    const needed = Math.ceil(el.offsetHeight) + 32;
+    setSpineWidth(Math.max(BOOK_SPINE_MIN_W, needed));
+  }, [folder.foldername, titleFontSize, titleMaxAlong]);
+
+  const W = spineWidth;
+  const H = BOOK_SPINE_H;
 
   const transform =
-    isPulling  ? "translateY(-30px)" :
-    isHovered  ? (isTouch ? "scale(1.03)" : "translateZ(20px) translateY(-10px)") :
-    isDragOver ? "translateY(-6px)"  :
-    "none";
+    isPulling ? "translateY(-60px)" :
+      isHovered ? (isTouch ? "scale(1.03)" : "translateZ(20px) translateY(-20px)") :
+        isDragOver ? "translateY(-12px)" :
+          "none";
   const shadow =
     isHovered
       ? "-4px 10px 24px rgba(0,0,0,0.32), inset -4px 0 8px rgba(0,0,0,0.18)"
@@ -728,60 +749,143 @@ function BookSpine({
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            padding: "12px 0 10px",
+            padding: "24px 0 20px",
             boxShadow: shadow,
             borderRadius: "2px 0 0 2px",
-            overflow: "hidden",
-            transition: "box-shadow 150ms",
+            overflow: "visible",
+            transition: "box-shadow 150ms, width 200ms ease",
             border: openReferenceSpine ? `1px solid rgba(26,39,68,0.12)` : "none",
             borderRight: "none",
           }}
         >
-          {/* Accent stripe */}
-          <div style={{
-            position: "absolute", top: 14, left: 0, right: 0,
-            height: 3,
-            background: openReferenceSpine ? "rgba(201,124,42,0.55)" : C.gold,
-            opacity: openReferenceSpine ? 1 : 0.9,
-          }} />
-
           {/* Top cap */}
           <div style={{
-            position: "absolute", top: 0, left: 0, right: 0, height: 8,
+            position: "absolute", top: 0, left: 0, right: 0, height: 16,
             background: openReferenceSpine ? "rgba(26,39,68,0.06)" : "rgba(0,0,0,0.22)",
           }} />
 
-          {/* Title (vertical, rotated) */}
+          {/* Brand label — parchment stamp, navy serif (matches spine typography) */}
+          <div
+            style={{
+              position: "absolute",
+              top: 18,
+              left: 8,
+              right: 8,
+              zIndex: 2,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              padding: "5px 8px 7px",
+              background: openReferenceSpine
+                ? "rgba(250,248,243,0.72)"
+                : "rgba(250,248,243,0.94)",
+              border: `1px solid ${C.border}`,
+              borderRadius: 2,
+              boxShadow:
+                "inset 0 1px 0 rgba(255,255,255,0.55), 0 1px 2px rgba(26,39,68,0.06)",
+            }}
+          >
+            <span
+              style={{
+                fontFamily: fontSerif,
+                fontSize: 12,
+                fontWeight: 700,
+                fontStyle: "italic",
+                fontVariant: "small-caps",
+                letterSpacing: "0.16em",
+                color: C.navy,
+                lineHeight: 1.15,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {SPINE_BRAND_LABEL}
+            </span>
+            <div
+              aria-hidden
+              style={{
+                width: "70%",
+                height: 1,
+                marginTop: 5,
+                background: openReferenceSpine
+                  ? `linear-gradient(90deg, transparent, ${C.gold}, transparent)`
+                  : `linear-gradient(90deg, transparent, rgba(201,124,42,0.65), transparent)`,
+                opacity: 0.85,
+              }}
+            />
+          </div>
+
+          {/* Hidden measurer — wrap width = length along spine; height → dynamic spine width */}
+          <div
+            aria-hidden
+            style={{
+              position: "absolute",
+              left: -10000,
+              top: 0,
+              visibility: "hidden",
+              pointerEvents: "none",
+              width: titleMaxAlong,
+            }}
+          >
+            <div
+              ref={titleMeasureRef}
+              style={{
+                fontFamily: fontSerif,
+                fontSize: titleFontSize,
+                fontWeight: 600,
+                letterSpacing: "0.03em",
+                lineHeight: 1.25,
+                whiteSpace: "normal",
+                wordBreak: "break-word",
+                textAlign: "center",
+                padding: "0 8px",
+              }}
+            >
+              {folder.foldername}
+            </div>
+          </div>
+
+          {/* Title — horizontal letters, wrapped, rotated along the spine */}
           <div style={{
             flex: 1,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            writingMode: "vertical-rl",
-            transform: "rotate(180deg)",
-            padding: "8px 6px",
-            overflow: "hidden",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            overflow: "visible",
+            padding: "16px 8px",
+            minHeight: 0,
           }}>
-            <span style={{
-              fontFamily: fontSerif,
-              fontSize: folder.foldername.length > 20 ? 10 : 12,
-              fontWeight: 600,
-              color: openReferenceSpine ? C.navy : "rgba(255,255,255,0.92)",
-              letterSpacing: "0.03em",
-              lineHeight: 1.25,
-              textAlign: "center",
-              maxHeight: H - 60,
-              overflow: "hidden",
-            }}>
-              {folder.foldername}
-            </span>
+            <div
+              style={{
+                width: titleMaxAlong,
+                display: "flex",
+                justifyContent: "center",
+                transform: "rotate(-90deg)",
+                transformOrigin: "center center",
+              }}
+            >
+              <span style={{
+                fontFamily: fontSerif,
+                fontSize: titleFontSize,
+                fontWeight: 600,
+                color: openReferenceSpine ? C.navy : "rgba(255,255,255,0.92)",
+                letterSpacing: "0.03em",
+                lineHeight: 1.25,
+                whiteSpace: "normal",
+                wordBreak: "break-word",
+                textAlign: "center",
+              }}>
+                {folder.foldername}
+              </span>
+            </div>
           </div>
 
           {/* Lock / file count / open label */}
           <div style={{
-            fontFamily: fontBody, fontSize: 9,
+            fontFamily: fontBody, fontSize: 18,
             color: openReferenceSpine ? C.muted : "rgba(255,255,255,0.65)",
             letterSpacing: "0.04em",
             textAlign: "center",
-            paddingBottom: 2,
+            paddingBottom: 4,
           }}>
             {folder.lock ? "🔒" : `${folder.files.length} file${folder.files.length === 1 ? "" : "s"}`}
           </div>
@@ -789,7 +893,7 @@ function BookSpine({
 
         {/* Right face — stacked pages edge */}
         <div style={{
-          width: 9, height: H,
+          width: BOOK_SPINE_EDGE_W, height: H,
           background: openReferenceSpine ? "#f5eee2" : "#f0e8d8",
           backgroundImage: openReferenceSpine
             ? "repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(26,39,68,0.06) 2px,rgba(26,39,68,0.06) 3px)"
@@ -815,10 +919,10 @@ function BookSpine({
             animation: "tooltipRise 150ms ease-out forwards",
             pointerEvents: "none",
           }}>
-            <p style={{ fontFamily: fontSerif, fontSize: 12, color: C.navy, fontWeight: 600, marginBottom: 3 }}>
+            <p style={{ fontFamily: fontSerif, fontSize: 24, color: C.navy, fontWeight: 600, marginBottom: 6 }}>
               {folder.foldername}
             </p>
-            <p style={{ fontFamily: fontBody, fontSize: 11, color: C.muted }}>
+            <p style={{ fontFamily: fontBody, fontSize: 22, color: C.muted }}>
               {folder.lock && !admin
                 ? "Access restricted · Contact admin"
                 : `${folder.files.length} file${folder.files.length === 1 ? "" : "s"} · Click to open`}
@@ -834,7 +938,7 @@ function BookSpine({
           onClick={e => { e.stopPropagation(); onEditToggle(); }}
           title="Edit folder"
           style={{
-            marginTop: 4, fontFamily: fontBody, fontSize: 10,
+            marginTop: 8, fontFamily: fontBody, fontSize: 20,
             color: C.muted, background: "none", border: "none",
             cursor: "pointer", padding: "2px 6px", borderRadius: 3,
             opacity: isHovered ? 1 : 0.4,
@@ -879,8 +983,10 @@ function EditPanel({
           color: C.navy, background: "white", outline: "none", marginBottom: 8,
         }}
       />
-      <label style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 10,
-        fontFamily: fontBody, fontSize: 12, color: C.navy, cursor: "pointer" }}>
+      <label style={{
+        display: "flex", gap: 6, alignItems: "center", marginBottom: 10,
+        fontFamily: fontBody, fontSize: 12, color: C.navy, cursor: "pointer"
+      }}>
         <input type="checkbox" checked={lockDraft} onChange={e => onLockChange(e.target.checked)}
           style={{ accentColor: C.navy }} />
         Lock folder
@@ -892,11 +998,11 @@ function EditPanel({
             onClick={onSave}
             disabled={!nameDraft.trim() || renamePending}
             style={{
-            flex: 1, padding: "5px 0",
-            fontFamily: fontBody, fontSize: 11, color: "white",
-            background: C.navy, border: "none", borderRadius: 3, cursor: "pointer",
-            opacity: !nameDraft.trim() ? 0.5 : 1,
-          }}>
+              flex: 1, padding: "5px 0",
+              fontFamily: fontBody, fontSize: 11, color: "white",
+              background: C.navy, border: "none", borderRadius: 3, cursor: "pointer",
+              opacity: !nameDraft.trim() ? 0.5 : 1,
+            }}>
             {renamePending ? "Saving…" : "Save"}
           </button>
           <button type="button" onClick={onCancel}
@@ -937,7 +1043,7 @@ function GlobalSearchItem({ item, keyword, returnTo }: { item: GlobalFindItem; k
     [item.content, keyword]
   );
   const totalChunks = Math.max(1, Math.ceil(pageEntries.length / PAGE_CHUNK_SIZE));
-  const pageStart   = pageChunk * PAGE_CHUNK_SIZE;
+  const pageStart = pageChunk * PAGE_CHUNK_SIZE;
   const pagedEntries = pageEntries.slice(pageStart, pageStart + PAGE_CHUNK_SIZE);
 
   return (
@@ -976,8 +1082,10 @@ function GlobalSearchItem({ item, keyword, returnTo }: { item: GlobalFindItem; k
                 </span>
                 <span style={{ fontFamily: fontBody, fontSize: 11, color: C.muted }}>Open →</span>
               </div>
-              <p style={{ fontFamily: fontBody, fontSize: 12, color: "#444", lineHeight: 1.55,
-                whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+              <p style={{
+                fontFamily: fontBody, fontSize: 12, color: "#444", lineHeight: 1.55,
+                whiteSpace: "pre-wrap", wordBreak: "break-word"
+              }}>
                 {highlightKeyword(entry.snippet, keyword)}
               </p>
             </Link>
@@ -985,14 +1093,18 @@ function GlobalSearchItem({ item, keyword, returnTo }: { item: GlobalFindItem; k
           {pageEntries.length > PAGE_CHUNK_SIZE && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: fontBody, fontSize: 12 }}>
               <button onClick={() => setPageChunk(p => Math.max(0, p - 1))} disabled={pageChunk === 0}
-                style={{ padding: "3px 10px", border: `1px solid ${C.border}`, borderRadius: 3, cursor: "pointer",
-                  background: "white", color: C.navy, opacity: pageChunk === 0 ? 0.4 : 1 }}>
+                style={{
+                  padding: "3px 10px", border: `1px solid ${C.border}`, borderRadius: 3, cursor: "pointer",
+                  background: "white", color: C.navy, opacity: pageChunk === 0 ? 0.4 : 1
+                }}>
                 ‹ Prev
               </button>
               <span style={{ color: C.muted }}>{pageChunk + 1} / {totalChunks}</span>
               <button onClick={() => setPageChunk(p => Math.min(totalChunks - 1, p + 1))} disabled={pageChunk >= totalChunks - 1}
-                style={{ padding: "3px 10px", border: `1px solid ${C.border}`, borderRadius: 3, cursor: "pointer",
-                  background: "white", color: C.navy, opacity: pageChunk >= totalChunks - 1 ? 0.4 : 1 }}>
+                style={{
+                  padding: "3px 10px", border: `1px solid ${C.border}`, borderRadius: 3, cursor: "pointer",
+                  background: "white", color: C.navy, opacity: pageChunk >= totalChunks - 1 ? 0.4 : 1
+                }}>
                 Next ›
               </button>
             </div>
@@ -1033,7 +1145,7 @@ function beginFolderCardDragPreview(
   const rect = cardEl.getBoundingClientRect();
   pointerOffsetRef.current = {
     x: Math.max(0, Math.min(event.clientX - rect.left, rect.width)),
-    y: Math.max(0, Math.min(event.clientY - rect.top,  rect.height)),
+    y: Math.max(0, Math.min(event.clientY - rect.top, rect.height)),
   };
   const canvas = document.createElement("canvas");
   canvas.width = 1; canvas.height = 1;
@@ -1045,7 +1157,7 @@ function beginFolderCardDragPreview(
   Object.assign(ghost.style, {
     position: "fixed", boxSizing: "border-box", margin: "0",
     left: `${event.clientX - pointerOffsetRef.current.x}px`,
-    top:  `${event.clientY - pointerOffsetRef.current.y}px`,
+    top: `${event.clientY - pointerOffsetRef.current.y}px`,
     width: `${rect.width}px`, pointerEvents: "none",
     zIndex: "2147483647", opacity: "1",
   });
@@ -1076,7 +1188,7 @@ function extractSentencePreview(content: string, keyword: string): string {
   const idx = normalized.toLowerCase().indexOf(lowerKw);
   if (idx < 0) return normalized.length > max ? normalized.slice(0, max) + "..." : normalized;
   const start = Math.max(0, idx - radius);
-  const end   = Math.min(normalized.length, idx + lowerKw.length + radius);
+  const end = Math.min(normalized.length, idx + lowerKw.length + radius);
   return `${start > 0 ? "..." : ""}${normalized.slice(start, end)}${end < normalized.length ? "..." : ""}`;
 }
 

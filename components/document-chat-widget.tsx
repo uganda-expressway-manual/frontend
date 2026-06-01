@@ -149,7 +149,9 @@ export function DocumentChatWidget({
       : FALLBACK_CHAT_MODEL_OPTIONS;
 
   const chats = chatsQuery.data ?? [];
-  const isHistoryLoading = Boolean(activeChatId) && chatHistoryQuery.isLoading;
+  const isHistoryLoading =
+    Boolean(activeChatId) &&
+    (chatHistoryQuery.isLoading || chatHistoryQuery.isFetching);
 
   const resetToNewChat = useCallback(() => {
     setActiveChatId(null);
@@ -166,15 +168,32 @@ export function DocumentChatWidget({
     setActiveChatId(chat.id);
     setActiveChatTitle(chat.title);
     setAssistantTyping(null);
+    setEditingMessageId(null);
+    setEditingMessageText("");
     setIsSidebarOpen(false);
     setChatContextMenuId(null);
-  }, []);
+    if (chat.id !== activeChatId) {
+      void queryClient.fetchQuery({
+        queryKey: ["chat", chat.id, "history"],
+        queryFn: () => getChatHistory(chat.id),
+      });
+    } else {
+      void queryClient.invalidateQueries({ queryKey: ["chat", chat.id, "history"] });
+    }
+  }, [activeChatId, queryClient]);
 
   useEffect(() => {
     if (!activeChatId) {
       return;
     }
-    if (chatHistoryQuery.isLoading || !chatHistoryQuery.isSuccess || !chatHistoryQuery.data) {
+    if (chatHistoryQuery.isLoading || chatHistoryQuery.isFetching) {
+      return;
+    }
+    if (!chatHistoryQuery.isSuccess || !chatHistoryQuery.data) {
+      return;
+    }
+    const historyChatId = chatHistoryQuery.data.id || activeChatId;
+    if (historyChatId !== activeChatId) {
       return;
     }
     setActiveChatTitle(chatHistoryQuery.data.title);
@@ -182,6 +201,7 @@ export function DocumentChatWidget({
   }, [
     activeChatId,
     chatHistoryQuery.data,
+    chatHistoryQuery.isFetching,
     chatHistoryQuery.isLoading,
     chatHistoryQuery.isSuccess,
     folderId,
