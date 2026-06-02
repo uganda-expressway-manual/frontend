@@ -929,13 +929,9 @@ function parseChatHistoryMessage(entry: unknown, index: number): ChatHistoryMess
     return null;
   }
   const o = entry as Record<string, unknown>;
-<<<<<<< HEAD
-  const role = parseChatMessageRole(o.role ?? o.from ?? o.sender ?? o.type);
-=======
   const role = parseChatMessageRole(
     o.role ?? o.sender ?? o.type ?? o.author ?? o.from ?? o.isUser,
   );
->>>>>>> d0b28f010d6e5647103187cb67c442c4d857ba21
   const content =
     (typeof o.text === "string" && o.text) ||
     (typeof o.content === "string" && o.content) ||
