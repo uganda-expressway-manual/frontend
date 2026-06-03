@@ -651,7 +651,6 @@ function Shelf({
 
 const BOOK_SPINE_MIN_W = 152;
 const BOOK_SPINE_H = 440;
-const BOOK_SPINE_EDGE_W = 18;
 const BOOK_SPINE_TITLE_PAD = 140;
 const SPINE_BRAND_LABEL = "Expressway";
 
@@ -751,11 +750,10 @@ function BookSpine({
             alignItems: "center",
             padding: "24px 0 20px",
             boxShadow: shadow,
-            borderRadius: "2px 0 0 2px",
+            borderRadius: 2,
             overflow: "visible",
             transition: "box-shadow 150ms, width 200ms ease",
             border: openReferenceSpine ? `1px solid rgba(26,39,68,0.12)` : "none",
-            borderRight: "none",
           }}
         >
           {/* Top cap */}
@@ -890,17 +888,6 @@ function BookSpine({
             {folder.lock ? "🔒" : `${folder.files.length} file${folder.files.length === 1 ? "" : "s"}`}
           </div>
         </div>
-
-        {/* Right face — stacked pages edge */}
-        <div style={{
-          width: BOOK_SPINE_EDGE_W, height: H,
-          background: openReferenceSpine ? "#f5eee2" : "#f0e8d8",
-          backgroundImage: openReferenceSpine
-            ? "repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(26,39,68,0.06) 2px,rgba(26,39,68,0.06) 3px)"
-            : "repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.04) 2px,rgba(0,0,0,0.04) 3px)",
-          borderRadius: "0 2px 2px 0",
-          boxShadow: "inset -1px 0 3px rgba(0,0,0,0.08)",
-        }} />
 
         {/* Hover tooltip */}
         {isHovered && !isPulling && (
