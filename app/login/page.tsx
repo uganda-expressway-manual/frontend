@@ -166,24 +166,6 @@ export default function LoginPage() {
             textAlign: "center", padding: "0 24px",
           }}>
             <p style={{
-              fontFamily: fontBody, fontSize: 9, color: C.gold,
-              letterSpacing: "0.14em", textTransform: "uppercase",
-              marginBottom: 14,
-            }}>
-              Ministry of Works &amp; Transport
-            </p>
-            <h1 style={{
-              fontFamily: fontSerif, fontSize: 33, fontWeight: 700,
-              color: "white", lineHeight: 1.25, marginBottom: 14,
-            }}>
-              Expressway Integrated Manual
-            </h1>
-            {/* Gold divider */}
-            <div style={{
-              width: 36, height: 1.5, background: C.gold,
-              margin: "0 auto 14px",
-            }} />
-            <p style={{
               fontFamily: fontBody, fontSize: 13,
               color: "rgba(255,255,255,0.65)", lineHeight: 1.55,
             }}>

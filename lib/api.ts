@@ -545,8 +545,15 @@ function parsePdfPresignedUrlPayload(data: unknown): PdfPresignedUrlResponse {
 }
 
 /** GET `/files/pdf/:fileId` — JSON with S3 presigned `url`; no binary body. */
-export async function getPdfViewerPresignedUrl(fileId: string, signal?: AbortSignal): Promise<PdfPresignedUrlResponse> {
-  const { data } = await api.get<unknown>(`/files/pdf/${encodeURIComponent(fileId)}`, { signal });
+export async function getPdfViewerPresignedUrl(
+  fileId: string,
+  signal?: AbortSignal,
+  options?: { download?: boolean },
+): Promise<PdfPresignedUrlResponse> {
+  const { data } = await api.get<unknown>(`/files/pdf/${encodeURIComponent(fileId)}`, {
+    signal,
+    ...(options?.download ? { params: { download: "1" } } : {}),
+  });
   return parsePdfPresignedUrlPayload(data);
 }
 
@@ -929,13 +936,9 @@ function parseChatHistoryMessage(entry: unknown, index: number): ChatHistoryMess
     return null;
   }
   const o = entry as Record<string, unknown>;
-<<<<<<< HEAD
-  const role = parseChatMessageRole(o.role ?? o.from ?? o.sender ?? o.type);
-=======
   const role = parseChatMessageRole(
-    o.role ?? o.sender ?? o.type ?? o.author ?? o.from ?? o.isUser,
+    o.role ?? o.from ?? o.sender ?? o.type ?? o.author ?? o.isUser,
   );
->>>>>>> d0b28f010d6e5647103187cb67c442c4d857ba21
   const content =
     (typeof o.text === "string" && o.text) ||
     (typeof o.content === "string" && o.content) ||

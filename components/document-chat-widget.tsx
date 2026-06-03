@@ -150,13 +150,9 @@ export function DocumentChatWidget({
   const chats = chatsQuery.data ?? [];
   const isHistoryLoading =
     Boolean(activeChatId) &&
-<<<<<<< HEAD
-    (chatHistoryQuery.isLoading || chatHistoryQuery.isFetching);
-=======
     !showNewChatIntro &&
     (chatHistoryQuery.isLoading || chatHistoryQuery.isFetching) &&
     chatMessages.length === 0;
->>>>>>> d0b28f010d6e5647103187cb67c442c4d857ba21
 
   const resetToNewChat = useCallback(() => {
     setActiveChatId(null);
@@ -177,7 +173,7 @@ export function DocumentChatWidget({
     setEditingMessageText("");
     setIsSidebarOpen(false);
     setChatContextMenuId(null);
-<<<<<<< HEAD
+    setChatMessages([]);
     if (chat.id !== activeChatId) {
       void queryClient.fetchQuery({
         queryKey: ["chat", chat.id, "history"],
@@ -187,11 +183,6 @@ export function DocumentChatWidget({
       void queryClient.invalidateQueries({ queryKey: ["chat", chat.id, "history"] });
     }
   }, [activeChatId, queryClient]);
-=======
-    setChatMessages([]);
-    void queryClient.invalidateQueries({ queryKey: ["chat", chat.id, "history"] });
-  }, [queryClient]);
->>>>>>> d0b28f010d6e5647103187cb67c442c4d857ba21
 
   useEffect(() => {
     if (!activeChatId) {

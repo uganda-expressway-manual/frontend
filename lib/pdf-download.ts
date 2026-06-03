@@ -17,7 +17,7 @@ export async function triggerDirectDownload(
   fallbackFilename?: string,
   signal?: AbortSignal,
 ): Promise<void> {
-  const { url, filename } = await getPdfViewerPresignedUrl(fileId, signal);
+  const { url, filename } = await getPdfViewerPresignedUrl(fileId, signal, { download: true });
 
   const baseName = filename?.trim() || fallbackFilename?.trim() || `file-${fileId}`;
   const downloadName = baseName.toLowerCase().endsWith(".pdf") ? baseName : `${baseName}.pdf`;
