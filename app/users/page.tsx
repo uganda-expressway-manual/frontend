@@ -15,13 +15,23 @@ export default function ManageUsersPage() {
   const { user, token } = auth;
 
   useEffect(() => {
-    if (hasAuthSession(auth) && user && !isAdminUser(user)) {
+    if (!hasAuthSession(auth)) {
+      return;
+    }
+    if (token && !user) {
+      return;
+    }
+    if (user && !isAdminUser(user)) {
       router.replace("/dashboard");
     }
-  }, [auth, router, user]);
+  }, [auth, router, token, user]);
 
-  if (token && !user) {
+  if (hasAuthSession(auth) && token && !user) {
     return <p className="text-sm text-slate-600">Loading profile...</p>;
+  }
+
+  if (!hasAuthSession(auth)) {
+    return <p className="text-sm text-slate-600">Checking session…</p>;
   }
 
   if (!user || !isAdminUser(user)) {

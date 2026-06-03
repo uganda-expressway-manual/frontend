@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { hasAuthSession } from "@/lib/auth-session";
 import { useAuth } from "@/lib/hooks/use-auth";
@@ -24,17 +24,26 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const loggedIn = hasAuthSession(auth);
   const isStaff = isStaffRoute(pathname);
+  /** Wait until after hydration so sessionStorage-backed auth is visible before redirecting. */
+  const [authReady, setAuthReady] = useState(false);
 
   useEffect(() => {
+    setAuthReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!authReady) {
+      return;
+    }
     if (isStaff && !loggedIn) {
       router.replace("/login");
     }
     if (loggedIn && (pathname === "/login" || pathname === "/signup")) {
       router.replace("/dashboard");
     }
-  }, [loggedIn, isStaff, pathname, router]);
+  }, [authReady, loggedIn, isStaff, pathname, router]);
 
-  if (isStaff && !loggedIn) {
+  if (!authReady || (isStaff && !loggedIn)) {
     return <div className="p-6 text-sm text-imme-muted">Checking session…</div>;
   }
 

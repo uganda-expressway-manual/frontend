@@ -59,6 +59,10 @@ function getVerticalJitter(filename: string): number {
   return (filename.charCodeAt(0) % 7) - 3; // –3 … +3 px, stable per filename
 }
 
+const BOOK_HEIGHT = 230;
+const BOOK_COVER_WIDTH = 168;
+const BOOK_SPINE_WIDTH = 26;
+
 function formatDate(iso: string): string {
   try {
     return new Date(iso).toLocaleDateString("en-US", {
@@ -81,7 +85,7 @@ async function renderPdfThumbnail(pdfUrl: string, fileId: string): Promise<strin
   const page = await pdf.getPage(1);
 
   const viewport = page.getViewport({ scale: 1 });
-  const scale = 160 / viewport.width;
+  const scale = 200 / viewport.width;
   const scaledViewport = page.getViewport({ scale });
 
   const canvas = document.createElement("canvas");
@@ -287,7 +291,7 @@ function Book3D({
       >
         {/* ── Spine ── */}
         <div style={{
-          width: 22, height: 185,
+          width: BOOK_SPINE_WIDTH, height: BOOK_HEIGHT,
           borderRadius: "3px 0 0 3px",
           background: openVolume
             ? "linear-gradient(145deg,#f2ebe0 0%,#e4d9c8 50%,#d8ccb8 100%)"
@@ -311,13 +315,13 @@ function Book3D({
             writingMode: "vertical-rl",
             transform: "rotate(180deg)",
             fontFamily: fontDisplay,
-            fontSize: 8,
+            fontSize: 9,
             color: openVolume ? C.navy : "rgba(255,255,255,0.7)",
             letterSpacing: "0.12em",
             textTransform: "uppercase",
             whiteSpace: "nowrap",
             overflow: "hidden",
-            maxHeight: 140,
+            maxHeight: 175,
             textOverflow: "ellipsis",
             padding: "0 3px",
             opacity: openVolume ? 0.85 : 1,
@@ -328,7 +332,7 @@ function Book3D({
 
         {/* ── Cover face ── */}
         <div style={{
-          width: 130, height: 185,
+          width: BOOK_COVER_WIDTH, height: BOOK_HEIGHT,
           borderRadius: "0 3px 3px 0",
           overflow: "hidden",
           position: "relative",
@@ -370,9 +374,9 @@ function Book3D({
                 opacity: openVolume ? 0.75 : 1,
               }} />
               <p style={{
-                fontFamily: fontDisplay, fontSize: 10,
+                fontFamily: fontDisplay, fontSize: 12,
                 color: openVolume ? C.dark : "rgba(255,255,255,0.82)",
-                textAlign: "center", lineHeight: 1.4,
+                textAlign: "center", lineHeight: 1.45,
                 letterSpacing: "0.04em", wordBreak: "break-word",
               }}>
                 {displayName}
@@ -382,20 +386,21 @@ function Book3D({
 
           <div style={{
             position: "absolute", bottom: 0, left: 0, right: 0,
-            padding: "20px 10px 8px",
+            padding: "28px 12px 10px",
             background: openVolume
               ? "linear-gradient(0deg, rgba(244,241,236,0.97) 0%, transparent 100%)"
               : "linear-gradient(0deg, rgba(10,18,40,0.88) 0%, transparent 100%)",
             pointerEvents: "none",
           }}>
             <p style={{
-              fontFamily: fontSerif, fontSize: 9,
+              fontFamily: fontSerif, fontSize: 11,
               color: openVolume ? C.dark : "rgba(255,255,255,0.85)",
-              letterSpacing: "0.04em", lineHeight: 1.4,
+              letterSpacing: "0.04em", lineHeight: 1.45,
               display: "-webkit-box",
-              WebkitLineClamp: 2,
+              WebkitLineClamp: 3,
               WebkitBoxOrient: "vertical",
               overflow: "hidden",
+              wordBreak: "break-word",
             }}>
               {displayName}
             </p>
@@ -545,7 +550,7 @@ function EmptyShelf() {
     <div style={{ marginBottom: 48 }}>
       <div style={{
         display: "flex", alignItems: "flex-end", justifyContent: "center",
-        height: 185, paddingBottom: 16,
+        height: BOOK_HEIGHT, paddingBottom: 16,
       }}>
         <p style={{
           fontFamily: fontSerif, fontSize: 14,

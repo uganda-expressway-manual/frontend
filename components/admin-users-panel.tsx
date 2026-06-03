@@ -9,6 +9,8 @@ import { APP_PUBLIC_BASE_URL, APP_USERS_PORTAL_URL } from "@/lib/app-site";
 import { useAuth } from "@/lib/hooks/use-auth";
 import { parseUserStatus } from "@/lib/user-status";
 import { AppUser, UserRole, UserStatus } from "@/lib/types";
+import { AdminActionLoadingOverlay } from "@/components/admin-action-loading-overlay";
+import { ActionNoticeDialog } from "@/components/action-notice-dialog";
 import { DeleteUserConfirmDialog } from "@/components/delete-user-confirm-dialog";
 
 /**
@@ -25,6 +27,7 @@ export function AdminUsersPanel() {
   const [visibleUserPasswords, setVisibleUserPasswords] = useState<Record<string, boolean>>({});
   const [statusFilter, setStatusFilter] = useState<"ALL" | UserStatus>("ALL");
   const [userPendingDelete, setUserPendingDelete] = useState<AppUser | null>(null);
+  const [actionNotice, setActionNotice] = useState<{ title: string; message: string } | null>(null);
 
   const usersQuery = useQuery({
     queryKey: ["users"],
@@ -72,16 +75,28 @@ export function AdminUsersPanel() {
   const updateStatusMutation = useMutation({
     mutationFn: async ({ userId, status }: { userId: string; status: UserStatus }) =>
       patchUserStatus(userId, status),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       void usersQuery.refetch();
+      const target = usersQuery.data?.find((row) => row.id === variables.userId);
+      const label = target?.email?.trim() || target?.username?.trim() || "User";
+      setActionNotice({
+        title: "Status updated",
+        message: `${label} is now ${variables.status}.`,
+      });
     },
   });
 
   const updatePrivilegeMutation = useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: UserRole }) =>
       patchUserPrivilege(userId, role),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       void usersQuery.refetch();
+      const target = usersQuery.data?.find((row) => row.id === variables.userId);
+      const label = target?.email?.trim() || target?.username?.trim() || "User";
+      setActionNotice({
+        title: "Role updated",
+        message: `${label} is now ${variables.role}.`,
+      });
     },
   });
 
@@ -99,6 +114,22 @@ export function AdminUsersPanel() {
   };
 
   const createUserErrorMessage = getBackendErrorMessage(createUserMutation.error, "Failed to create user.");
+
+  const isUpdatingStatus = updateStatusMutation.isPending;
+  const isUpdatingRole = updatePrivilegeMutation.isPending;
+  const isUpdatingUserField = isUpdatingStatus || isUpdatingRole;
+  const updatingUserId =
+    updateStatusMutation.variables?.userId ?? updatePrivilegeMutation.variables?.userId ?? null;
+  const updatingUserLabel = (() => {
+    if (!updatingUserId) {
+      return "";
+    }
+    const target = usersQuery.data?.find((row) => row.id === updatingUserId);
+    return target?.email?.trim() || target?.username?.trim() || "this user";
+  })();
+  const loadingMessage = isUpdatingStatus
+    ? `Updating status for ${updatingUserLabel || "user"}…`
+    : `Updating role for ${updatingUserLabel || "user"}…`;
 
   return (
     <section id="admin-users" className="mx-auto max-w-6xl space-y-5 pb-10">
@@ -233,7 +264,7 @@ export function AdminUsersPanel() {
                             status: event.target.value as UserStatus,
                           })
                         }
-                        disabled={updateStatusMutation.isPending && updateStatusMutation.variables?.userId === listedUser.id}
+                        disabled={isUpdatingUserField}
                         aria-label={`Set status for ${listedUser.email}`}
                       >
                         <option value="WAITING">WAITING</option>
@@ -251,10 +282,7 @@ export function AdminUsersPanel() {
                             role: event.target.value as UserRole,
                           })
                         }
-                        disabled={
-                          updatePrivilegeMutation.isPending &&
-                          updatePrivilegeMutation.variables?.userId === listedUser.id
-                        }
+                        disabled={isUpdatingUserField}
                         aria-label={`Set role for ${listedUser.email}`}
                       >
                         <option value="USER">USER</option>
@@ -347,6 +375,13 @@ export function AdminUsersPanel() {
         {updatePrivilegeMutation.error && (
           <p className="text-sm text-red-600">{getBackendErrorMessage(updatePrivilegeMutation.error, "Failed to update role.")}</p>
         )}
+        <AdminActionLoadingOverlay open={isUpdatingUserField} message={loadingMessage} />
+        <ActionNoticeDialog
+          open={actionNotice !== null}
+          title={actionNotice?.title ?? ""}
+          message={actionNotice?.message ?? ""}
+          onClose={() => setActionNotice(null)}
+        />
       </section>
     </section>
   );

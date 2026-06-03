@@ -160,18 +160,6 @@ export default function LoginPage() {
             background: "linear-gradient(to top, rgba(10,18,40,0.85) 0%, rgba(10,18,40,0.45) 100%)",
           }} />
 
-          {/* Text overlay */}
-          <div style={{
-            position: "relative", zIndex: 1,
-            textAlign: "center", padding: "0 24px",
-          }}>
-            <p style={{
-              fontFamily: fontBody, fontSize: 13,
-              color: "rgba(255,255,255,0.65)", lineHeight: 1.55,
-            }}>
-              Sign in to access the complete reference documentation
-            </p>
-          </div>
         </div>
 
         {/* ── Center binding ── */}
