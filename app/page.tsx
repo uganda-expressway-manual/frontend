@@ -9,15 +9,25 @@ import { MANUAL_HOME_FADE_IN_KEY } from "@/lib/manual-home-fade";
 
 /**
  * Match the auth book-card feel (login ~500ms ease-out + slight rise).
- * Slightly longer so the homepage manual read as a clear fade-in, not a pop.
+ * Keep the homepage reveal noticeably slower so it reads as a fade-in, not a pop.
  */
-/** Homepage manual fade (enter/exit to login); 2× the prior 580ms for a slower reveal. */
-const MANUAL_FADE_MS = 1160;
+const MANUAL_FADE_MS = 1600;
 
 type ManualMotion = { opacity: number; translateY: number };
 
 const manualVisible: ManualMotion = { opacity: 1, translateY: 0 };
 const manualHidden: ManualMotion = { opacity: 0, translateY: 24 };
+
+function getInitialManualMotion(): ManualMotion {
+  if (typeof window === "undefined") {
+    return manualVisible;
+  }
+  try {
+    return sessionStorage.getItem(MANUAL_HOME_FADE_IN_KEY) === "1" ? manualHidden : manualVisible;
+  } catch {
+    return manualVisible;
+  }
+}
 
 /**
  * Public marketing home — interactive manual preview book.
@@ -27,7 +37,7 @@ export default function HomePage() {
   const router = useRouter();
   const auth = useAuth();
   const [isHydrated, setIsHydrated] = useState(false);
-  const [manualMotion, setManualMotion] = useState<ManualMotion>(manualVisible);
+  const [manualMotion, setManualMotion] = useState<ManualMotion>(getInitialManualMotion);
   const isLoggedIn = hasAuthSession(auth);
 
   useEffect(() => {
@@ -43,10 +53,10 @@ export default function HomePage() {
     try {
       if (sessionStorage.getItem(MANUAL_HOME_FADE_IN_KEY) !== "1") return;
       sessionStorage.removeItem(MANUAL_HOME_FADE_IN_KEY);
-      setManualMotion(manualHidden);
     } catch {
       return;
     }
+    setManualMotion(manualHidden);
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         setManualMotion(manualVisible);

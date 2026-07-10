@@ -58,6 +58,21 @@ export type ChatModelOption = {
   label: string;
 };
 
+function dedupeChatModelOptions(options: ChatModelOption[]): ChatModelOption[] {
+  const seen = new Set<string>();
+  const unique: ChatModelOption[] = [];
+
+  for (const option of options) {
+    if (seen.has(option.id)) {
+      continue;
+    }
+    seen.add(option.id);
+    unique.push(option);
+  }
+
+  return unique;
+}
+
 export const api = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true,
@@ -708,14 +723,18 @@ function parseChatModelOption(entry: unknown): ChatModelOption | null {
 
 export function parseChatbotAvailableModelsPayload(data: unknown): ChatModelOption[] {
   if (Array.isArray(data)) {
-    return data.map(parseChatModelOption).filter((m): m is ChatModelOption => m !== null);
+    return dedupeChatModelOptions(
+      data.map(parseChatModelOption).filter((m): m is ChatModelOption => m !== null),
+    );
   }
   if (data != null && typeof data === "object") {
     const r = data as Record<string, unknown>;
     for (const key of ["models", "available_models", "data"] as const) {
       const nested = r[key];
       if (Array.isArray(nested)) {
-        const parsed = nested.map(parseChatModelOption).filter((m): m is ChatModelOption => m !== null);
+        const parsed = dedupeChatModelOptions(
+          nested.map(parseChatModelOption).filter((m): m is ChatModelOption => m !== null),
+        );
         if (parsed.length > 0) {
           return parsed;
         }
