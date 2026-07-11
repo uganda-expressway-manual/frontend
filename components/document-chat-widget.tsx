@@ -108,6 +108,13 @@ export function DocumentChatWidget({
   const [panelVisible, setPanelVisible] = useState(false);
 
   const chatViewportRef = useRef<HTMLDivElement | null>(null);
+  const shouldAutoScrollRef = useRef(true);
+  const handleChatViewportScroll = useCallback(() => {
+    const viewport = chatViewportRef.current;
+    if (!viewport) return;
+    const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+    shouldAutoScrollRef.current = distanceFromBottom <= 48;
+  }, []);
   const requestSequenceRef = useRef(0);
   const blockedRequestIdsRef = useRef<Set<number>>(new Set());
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -397,11 +404,15 @@ export function DocumentChatWidget({
   /* ── Auto-scroll ── */
   useEffect(() => {
     if (!chatViewportRef.current) return;
+    // Respect user's manual scroll while the assistant is typing — do not force-scroll
+    // if the user has scrolled away from the bottom.
+    if (!shouldAutoScrollRef.current) return;
+    if (assistantTyping) return;
     chatViewportRef.current.scrollTo({
       top: chatViewportRef.current.scrollHeight,
       behavior: "smooth",
     });
-  }, [chatMessages, isChatOpen]);
+  }, [chatMessages, isChatOpen, assistantTyping]);
 
   /* ── Typing animation ── */
   useEffect(() => {
@@ -1052,6 +1063,7 @@ export function DocumentChatWidget({
             {/* Messages */}
             <div
               ref={chatViewportRef}
+              onScroll={handleChatViewportScroll}
               className="lib-chat-scrollbar"
               style={{
                 flex: 1,
@@ -1066,191 +1078,191 @@ export function DocumentChatWidget({
                 width: "100%",
               }}
             >
-            {showNoChatroomPrompt && (
-              <div style={{
-                flex: 1,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                textAlign: "center",
-                padding: "24px 16px",
-                gap: 16,
-              }}>
-                <BookIcon size={36} color={C.gold} />
-                <p style={{
-                  margin: 0,
-                  fontFamily: fontSerif,
-                  fontSize: 17,
-                  fontWeight: 700,
-                  color: C.navy,
-                  lineHeight: 1.35,
+              {showNoChatroomPrompt && (
+                <div style={{
+                  flex: 1,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  textAlign: "center",
+                  padding: "24px 16px",
+                  gap: 16,
                 }}>
-                  Start a chatroom first
-                </p>
-                <p style={{
-                  margin: 0,
-                  fontFamily: fontBody,
-                  fontSize: 13,
-                  color: C.muted,
-                  maxWidth: 260,
-                  lineHeight: 1.55,
-                }}>
-                  Create a new chatroom or open an existing one from the menu before sending messages to the AI.
-                </p>
-                <button
-                  type="button"
-                  onClick={handleNewChat}
-                  style={{
+                  <BookIcon size={36} color={C.gold} />
+                  <p style={{
+                    margin: 0,
+                    fontFamily: fontSerif,
+                    fontSize: 17,
+                    fontWeight: 700,
+                    color: C.navy,
+                    lineHeight: 1.35,
+                  }}>
+                    Start a chatroom first
+                  </p>
+                  <p style={{
+                    margin: 0,
                     fontFamily: fontBody,
                     fontSize: 13,
-                    fontWeight: 600,
-                    padding: "9px 18px",
-                    border: "none",
-                    borderRadius: 3,
-                    background: C.navy,
-                    color: C.paper,
-                    cursor: "pointer",
-                    letterSpacing: "0.04em",
-                  }}
-                >
-                  Create chatroom
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsSidebarOpen(true)}
-                  style={{
-                    fontFamily: fontBody,
-                    fontSize: 12,
-                    padding: 0,
-                    border: "none",
-                    background: "none",
-                    color: C.gold,
-                    cursor: "pointer",
-                    textDecoration: "underline",
-                    textUnderlineOffset: 2,
-                  }}
-                >
-                  Browse existing chatrooms
-                </button>
-              </div>
-            )}
-
-            {showGreetingEmpty && (
-              <div style={{
-                flex: 1,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                textAlign: "center",
-                padding: "16px 8px",
-                gap: 14,
-              }}>
-                <BookIcon size={36} color={C.gold} />
-                <div style={{
-                  maxWidth: "92%",
-                  fontFamily: fontBody,
-                  fontSize: 13,
-                  color: "#3a3020",
-                  lineHeight: 1.7,
-                  textAlign: "left",
-                  borderLeft: `2px solid ${C.gold}`,
-                  background: "rgba(201,124,42,0.04)",
-                  borderRadius: "0 4px 4px 0",
-                  padding: "12px 14px",
-                }}>
-                  {renderMessageText(buildInitialGreeting(folderId, contextLabel), "assistant")}
+                    color: C.muted,
+                    maxWidth: 260,
+                    lineHeight: 1.55,
+                  }}>
+                    Create a new chatroom or open an existing one from the menu before sending messages to the AI.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleNewChat}
+                    style={{
+                      fontFamily: fontBody,
+                      fontSize: 13,
+                      fontWeight: 600,
+                      padding: "9px 18px",
+                      border: "none",
+                      borderRadius: 3,
+                      background: C.navy,
+                      color: C.paper,
+                      cursor: "pointer",
+                      letterSpacing: "0.04em",
+                    }}
+                  >
+                    Create chatroom
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsSidebarOpen(true)}
+                    style={{
+                      fontFamily: fontBody,
+                      fontSize: 12,
+                      padding: 0,
+                      border: "none",
+                      background: "none",
+                      color: C.gold,
+                      cursor: "pointer",
+                      textDecoration: "underline",
+                      textUnderlineOffset: 2,
+                    }}
+                  >
+                    Browse existing chatrooms
+                  </button>
                 </div>
-              </div>
-            )}
+              )}
 
-            {isHistoryLoading && chatMessages.length === 0 && (
-              <p style={{ fontFamily: fontBody, fontSize: 13, color: C.muted, textAlign: "center" }}>
-                Loading history…
-              </p>
-            )}
-            {!isHistoryLoading && !showNoChatroomPrompt && !showGreetingEmpty && chatMessages.map(message => {
-              const isTypingMessage = assistantTyping?.messageId === message.id;
-              const isAssistant = message.role === "assistant";
+              {showGreetingEmpty && (
+                <div style={{
+                  flex: 1,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  textAlign: "center",
+                  padding: "16px 8px",
+                  gap: 14,
+                }}>
+                  <BookIcon size={36} color={C.gold} />
+                  <div style={{
+                    maxWidth: "92%",
+                    fontFamily: fontBody,
+                    fontSize: 13,
+                    color: "#3a3020",
+                    lineHeight: 1.7,
+                    textAlign: "left",
+                    borderLeft: `2px solid ${C.gold}`,
+                    background: "rgba(201,124,42,0.04)",
+                    borderRadius: "0 4px 4px 0",
+                    padding: "12px 14px",
+                  }}>
+                    {renderMessageText(buildInitialGreeting(folderId, contextLabel), "assistant")}
+                  </div>
+                </div>
+              )}
 
-              if (isAssistant) {
-                return (
-                  <div key={message.id} style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-                    <div style={{
-                      borderLeft: "2px solid " + C.gold,
-                      background: "rgba(201,124,42,0.04)",
-                      borderRadius: "0 4px 4px 0",
-                      padding: "12px 14px",
-                      fontFamily: fontBody, fontSize: 13,
-                      color: "#3a3020", lineHeight: 1.7,
-                      maxWidth: "90%",
-                    }}>
-                      <div className="break-words">
-                        {isTypingMessage && !message.text ? (
-                          <span className="chat-typing-cursor-line" aria-hidden />
-                        ) : isTypingMessage ? (
-                          <div className="chat-typing-md">
-                            {renderMessageText(message.text, "assistant", { streamCursor: true })}
+              {isHistoryLoading && chatMessages.length === 0 && (
+                <p style={{ fontFamily: fontBody, fontSize: 13, color: C.muted, textAlign: "center" }}>
+                  Loading history…
+                </p>
+              )}
+              {!isHistoryLoading && !showNoChatroomPrompt && !showGreetingEmpty && chatMessages.map(message => {
+                const isTypingMessage = assistantTyping?.messageId === message.id;
+                const isAssistant = message.role === "assistant";
+
+                if (isAssistant) {
+                  return (
+                    <div key={message.id} style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+                      <div style={{
+                        borderLeft: "2px solid " + C.gold,
+                        background: "rgba(201,124,42,0.04)",
+                        borderRadius: "0 4px 4px 0",
+                        padding: "12px 14px",
+                        fontFamily: fontBody, fontSize: 13,
+                        color: "#3a3020", lineHeight: 1.7,
+                        maxWidth: "90%",
+                      }}>
+                        <div className="break-words">
+                          {isTypingMessage && !message.text ? (
+                            <span className="chat-typing-cursor-line" aria-hidden />
+                          ) : isTypingMessage ? (
+                            <div className="chat-typing-md">
+                              {renderMessageText(message.text, "assistant", { streamCursor: true })}
+                            </div>
+                          ) : (
+                            renderMessageText(message.text, "assistant")
+                          )}
+                        </div>
+                        {!isTypingMessage && message.referencedPages && message.referencedPages.length > 0 && (
+                          <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6 }}>
+                            {message.referencedPages.map(ref => (
+                              <Link
+                                key={`${message.id}-${ref.href}-${ref.label}`}
+                                href={ref.href}
+                                style={{
+                                  fontFamily: fontBody, fontSize: 11,
+                                  color: C.gold, textDecoration: "underline",
+                                  textUnderlineOffset: 2,
+                                }}
+                              >
+                                {ref.label}
+                              </Link>
+                            ))}
                           </div>
-                        ) : (
-                          renderMessageText(message.text, "assistant")
                         )}
                       </div>
-                      {!isTypingMessage && message.referencedPages && message.referencedPages.length > 0 && (
-                        <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6 }}>
-                          {message.referencedPages.map(ref => (
-                            <Link
-                              key={`${message.id}-${ref.href}-${ref.label}`}
-                              href={ref.href}
-                              style={{
-                                fontFamily: fontBody, fontSize: 11,
-                                color: C.gold, textDecoration: "underline",
-                                textUnderlineOffset: 2,
-                              }}
-                            >
-                              {ref.label}
-                            </Link>
-                          ))}
+                      {message.text.trim() !== "" && !isTypingMessage && (
+                        <div style={{ marginTop: 4, paddingLeft: 2 }}>
+                          <MessageCopyButton text={message.text} variant="assistant" />
                         </div>
                       )}
                     </div>
-                    {message.text.trim() !== "" && !isTypingMessage && (
-                      <div style={{ marginTop: 4, paddingLeft: 2 }}>
-                        <MessageCopyButton text={message.text} variant="assistant" />
-                      </div>
-                    )}
-                  </div>
+                  );
+                }
+
+                /* User message */
+                return (
+                  <UserMessageBubble
+                    key={message.id}
+                    message={message}
+                    isEditing={editingMessageId === message.id}
+                    editingText={editingMessageText}
+                    onEditingTextChange={setEditingMessageText}
+                    onStartEdit={() => startEditingMessage(message)}
+                    onCancelEdit={cancelEditingMessage}
+                    onSaveEdit={saveEditedMessage}
+                    isSavingEdit={editMessageMutation.isPending}
+                    canEdit={Boolean(activeChatId) && isEditableUserMessage(message.id)}
+                  />
                 );
-              }
+              })}
 
-              /* User message */
-              return (
-                <UserMessageBubble
-                  key={message.id}
-                  message={message}
-                  isEditing={editingMessageId === message.id}
-                  editingText={editingMessageText}
-                  onEditingTextChange={setEditingMessageText}
-                  onStartEdit={() => startEditingMessage(message)}
-                  onCancelEdit={cancelEditingMessage}
-                  onSaveEdit={saveEditedMessage}
-                  isSavingEdit={editMessageMutation.isPending}
-                  canEdit={Boolean(activeChatId) && isEditableUserMessage(message.id)}
-                />
-              );
-            })}
-
-            {/* "Consulting the archive…" loading state */}
-            {hasActiveChatroom && chatMutation.isPending && (
-              <p className="lib-consulting-text" style={{
-                fontFamily: fontBody, fontSize: 12, fontStyle: "italic",
-                color: C.muted, margin: 0, paddingLeft: 14,
-              }}>
-                Consulting the archive…
-              </p>
-            )}
-          </div>
+              {/* "Consulting the archive…" loading state */}
+              {hasActiveChatroom && chatMutation.isPending && (
+                <p className="lib-consulting-text" style={{
+                  fontFamily: fontBody, fontSize: 12, fontStyle: "italic",
+                  color: C.muted, margin: 0, paddingLeft: 14,
+                }}>
+                  Consulting the archive…
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Input area */}
