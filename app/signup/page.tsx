@@ -254,7 +254,6 @@ export default function SignUpPage() {
       background: C.bg,
       display: "flex", alignItems: "center", justifyContent: "center",
       padding: "24px 16px",
-      backgroundImage: "repeating-linear-gradient(0deg,transparent,transparent 22px,rgba(0,0,0,0.018) 22px,rgba(0,0,0,0.018) 23px)",
     }}>
       {/* ── Open book card ── */}
       <div style={{
@@ -355,7 +354,6 @@ export default function SignUpPage() {
         <div style={{
           flex: 1,
           background: C.paper,
-          backgroundImage: "repeating-linear-gradient(0deg,transparent,transparent 24px,rgba(180,160,120,0.06) 24px,rgba(180,160,120,0.06) 25px)",
           padding: "40px 44px",
           display: "flex", flexDirection: "column", justifyContent: "center",
           position: "relative",

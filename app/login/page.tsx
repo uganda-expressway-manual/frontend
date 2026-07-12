@@ -111,9 +111,6 @@ export default function LoginPage() {
       background: C.bg,
       display: "flex", alignItems: "center", justifyContent: "center",
       padding: "24px 16px",
-      /* paper texture */
-      backgroundImage:
-        "repeating-linear-gradient(0deg,transparent,transparent 22px,rgba(0,0,0,0.018) 22px,rgba(0,0,0,0.018) 23px)",
     }}>
       {/* Book-spread card */}
       <div style={{
@@ -173,8 +170,6 @@ export default function LoginPage() {
         <div style={{
           flex: 1,
           background: C.paper,
-          backgroundImage:
-            "repeating-linear-gradient(0deg,transparent,transparent 22px,rgba(0,0,0,0.025) 22px,rgba(0,0,0,0.025) 23px)",
           padding: "40px 36px 32px",
           display: "flex", flexDirection: "column", justifyContent: "center",
           position: "relative",
