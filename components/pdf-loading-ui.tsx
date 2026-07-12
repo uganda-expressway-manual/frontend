@@ -1,5 +1,18 @@
 "use client";
 
+/* ── Design tokens (matches folder-browser.tsx / pdf-viewer chrome) ── */
+const fontSerif = "'Playfair Display', Georgia, serif";
+const fontBody = "'Source Serif 4', Georgia, serif";
+const C = {
+  navy: "#1a2744",
+  gold: "#c97c2a",
+  paper: "#faf8f3",
+  bg: "#f4f1ec",
+  border: "#d0c4aa",
+  muted: "#8a7a60",
+  green: "#2d6a3a",
+};
+
 export function PdfViewerPageLoading(props: {
   fileMetadataLoaded: boolean;
   pdfBytesFetched: boolean;
@@ -19,132 +32,158 @@ export function PdfViewerPageLoading(props: {
       : " ";
 
   return (
-    <section className="mx-auto w-full max-w-md px-3">
-      <div className="rounded-2xl border border-slate-200/90 bg-gradient-to-b from-white via-white to-slate-50/90 p-6 shadow-sm ring-1 ring-slate-900/5">
-        <div className="mb-5 flex items-start gap-3">
+    <section style={{ maxWidth: 420, margin: "0 auto", padding: "0 12px", fontFamily: fontBody }}>
+      <div
+        style={{
+          borderRadius: 16,
+          border: `1px solid ${C.border}`,
+          background: `linear-gradient(180deg, #ffffff 0%, ${C.paper} 100%)`,
+          padding: 28,
+          boxShadow: "0 8px 28px rgba(26,39,68,0.08)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 20 }}>
+          {/* Open-book badge with a gentle "page turn" animation */}
           <div
-            className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-700 ring-1 ring-sky-100"
             aria-hidden
+            style={{
+              flexShrink: 0,
+              width: 44,
+              height: 44,
+              borderRadius: 12,
+              background: C.navy,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: `0 0 0 3px rgba(201,124,42,0.16)`,
+            }}
           >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.106 18.742H21a3.042 3.042 0 0 0 3.046-3.046V10.125a48 48 0 0 0-3.93-21.066A48.036 48.036 0 0 0 12 7.086m0 17.734c-.882.087-1.77.086-2.67 0-.9-.086-1.79-.086-2.671 0M12 21.086c-.882-.087-1.77-.086-2.671 0M12 21.086"
-              />
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 5.5c2.2-1 4.6-1 7 0v13c-2.4-1-4.8-1-7 0v-13Z" style={{ transformOrigin: "10px 12px", animation: "pdfLoadPageTurn 1.8s ease-in-out infinite" }} />
+              <path d="M21 5.5c-2.2-1-4.6-1-7 0v13c2.4-1 4.8-1 7 0v-13Z" />
             </svg>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold tracking-tight text-slate-900">Opening document</p>
+          <div style={{ minWidth: 0, flex: 1, paddingTop: 2 }}>
+            <p style={{ fontFamily: fontSerif, fontSize: 16, fontWeight: 700, color: C.navy }}>
+              Opening your manual…
+            </p>
             {filename ? (
-              <p className="mt-1 truncate text-xs text-slate-500" title={filename}>
+              <p
+                style={{
+                  marginTop: 4, fontSize: 12, fontStyle: "italic", color: C.muted,
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}
+                title={filename}
+              >
                 {filename}
               </p>
             ) : (
-              <p className="mt-1 text-xs text-slate-500">{detailLabel.trim() ? detailLabel : "\u00a0"}</p>
+              <p style={{ marginTop: 4, fontSize: 12, color: C.muted }}>{detailLabel.trim() ? detailLabel : " "}</p>
             )}
           </div>
         </div>
 
-        <dl className="mb-4 space-y-2 text-xs">
-          <div className="flex items-center justify-between gap-2">
-            <dt className="font-medium text-slate-600">File details</dt>
-            <dd className="flex items-center gap-1.5 text-slate-700">
-              {fileMetadataLoaded ? (
-                <>
-                  <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700">
-                    ✓
-                  </span>
-                  <span className="text-emerald-800">Ready</span>
-                </>
-              ) : (
-                <>
-                  <span className="relative flex h-2 w-2">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-60" />
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-sky-500" />
-                  </span>
-                  <span className="text-slate-600">Fetching…</span>
-                </>
-              )}
-            </dd>
-          </div>
-          <div className="flex items-center justify-between gap-2">
-            <dt className="font-medium text-slate-600">PDF stream</dt>
-            <dd className="flex items-center gap-1.5 text-slate-700">
-              {pdfBytesFetched ? (
-                <>
-                  <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700">
-                    ✓
-                  </span>
-                  <span className="text-emerald-800">Ready</span>
-                </>
-              ) : (
-                <>
-                  <span className="relative flex h-2 w-2">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-60" />
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-sky-500" />
-                  </span>
-                  <span className="text-slate-600">Fetching…</span>
-                </>
-              )}
-            </dd>
-          </div>
+        <dl style={{ marginBottom: 16, display: "flex", flexDirection: "column", gap: 8, fontSize: 12 }}>
+          <LoadingRow label="File details" ready={fileMetadataLoaded} />
+          <LoadingRow label="PDF stream" ready={pdfBytesFetched} />
         </dl>
 
-        <div className="mb-2 flex items-center justify-between gap-3 text-[11px] text-slate-600">
-          <span className="font-medium tabular-nums text-slate-700">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, fontSize: 11, color: C.muted }}>
+          <span style={{ fontWeight: 600, color: C.navy, fontVariantNumeric: "tabular-nums" }}>
             {stillWorking ? (overallPercent !== null ? `${overallPercent}%` : "Loading…") : "100%"}
           </span>
         </div>
         <div
-          className={["relative h-2.5 w-full overflow-hidden rounded-full bg-slate-200/90", barIndeterminate ? "pdf-load-track-indeterminate" : ""].join(
-            " ",
-          )}
           role="progressbar"
           aria-busy={stillWorking}
           aria-label="Loading PDF viewer"
           aria-valuemin={0}
           aria-valuemax={100}
-          aria-valuenow={
-            overallPercent !== null ? overallPercent : stillWorking ? undefined : 100
-          }
-          aria-valuetext={
-            overallPercent !== null ? `${overallPercent}%` : stillWorking ? "Loading progress unknown" : "100%"
-          }
+          aria-valuenow={overallPercent !== null ? overallPercent : stillWorking ? undefined : 100}
+          aria-valuetext={overallPercent !== null ? `${overallPercent}%` : stillWorking ? "Loading progress unknown" : "100%"}
+          style={{
+            position: "relative", height: 8, width: "100%", overflow: "hidden", borderRadius: 999,
+            background: "#ece3d3",
+          }}
         >
           <div
-            className={[
-              "h-full rounded-full bg-gradient-to-r from-sky-500 via-blue-500 to-blue-600 shadow-sm transition-[width] duration-150 ease-out",
-              barIndeterminate ? "pdf-load-bar-indeterminate w-[38%]" : overallPercent !== null ? "" : stillWorking ? "w-0" : "w-full",
-            ].filter(Boolean).join(" ")}
-            style={overallPercent !== null && stillWorking ? { width: `${Math.min(100, Math.max(0, overallPercent))}%` } : undefined}
+            style={{
+              height: "100%",
+              borderRadius: 999,
+              background: `linear-gradient(90deg, ${C.gold}, #dba15a)`,
+              boxShadow: "0 1px 2px rgba(201,124,42,0.35)",
+              transition: "width 150ms ease-out",
+              width: barIndeterminate
+                ? "38%"
+                : overallPercent !== null
+                  ? `${Math.min(100, Math.max(0, overallPercent))}%`
+                  : stillWorking ? "0%" : "100%",
+              animation: barIndeterminate ? "pdf-load-indeterminate-slide 1.25s ease-in-out infinite" : undefined,
+            }}
           />
         </div>
 
-        <p className="mt-3 text-center text-[11px] leading-relaxed text-slate-500">
+        <p style={{ marginTop: 14, textAlign: "center", fontSize: 11, fontStyle: "italic", lineHeight: 1.6, color: C.muted }}>
           {stillWorking
             ? "The app loads storage on the server so the browser does not need direct access to S3."
-            : "\u00a0"}
+            : " "}
         </p>
 
         <style jsx>{`
           @keyframes pdf-load-indeterminate-slide {
-            0% {
-              transform: translateX(-100%);
-            }
-            100% {
-              transform: translateX(350%);
-            }
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(350%); }
           }
-          :global(.pdf-load-bar-indeterminate) {
-            animation: pdf-load-indeterminate-slide 1.25s ease-in-out infinite;
-          }
-          :global(.pdf-load-track-indeterminate) {
-            background: linear-gradient(90deg, rgb(226 232 240 / 0.95), rgb(241 245 249 / 0.95));
+          @keyframes pdfLoadPageTurn {
+            0%, 100% { transform: rotateY(0deg); }
+            50% { transform: rotateY(35deg); }
           }
         `}</style>
       </div>
     </section>
+  );
+}
+
+function LoadingRow({ label, ready }: { label: string; ready: boolean }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+      <dt style={{ fontWeight: 600, color: C.navy }}>{label}</dt>
+      <dd style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        {ready ? (
+          <>
+            <span
+              style={{
+                display: "inline-flex", width: 16, height: 16, borderRadius: "50%",
+                alignItems: "center", justifyContent: "center",
+                background: "rgba(45,106,58,0.14)", color: C.green, fontSize: 10, fontWeight: 700,
+              }}
+            >
+              ✓
+            </span>
+            <span style={{ color: C.green }}>Ready</span>
+          </>
+        ) : (
+          <>
+            <span style={{ position: "relative", display: "flex", width: 8, height: 8 }}>
+              <span
+                style={{
+                  position: "absolute", inset: 0, borderRadius: "50%",
+                  background: C.gold, opacity: 0.55,
+                  animation: "pdfLoadPing 1.4s cubic-bezier(0,0,0.2,1) infinite",
+                }}
+              />
+              <span style={{ position: "relative", width: 8, height: 8, borderRadius: "50%", background: C.gold }} />
+            </span>
+            <span style={{ color: C.muted }}>Fetching…</span>
+          </>
+        )}
+      </dd>
+      <style jsx>{`
+        @keyframes pdfLoadPing {
+          75%, 100% { transform: scale(2.1); opacity: 0; }
+        }
+      `}</style>
+    </div>
   );
 }
 
@@ -213,29 +252,53 @@ export function PdfDocumentRenderLoading(props: {
   const barWidth = percent !== null ? Math.min(100, Math.max(0, percent)) : 8;
 
   return (
-    <div className="rounded-xl border border-slate-200/90 bg-gradient-to-b from-white to-slate-50/80 p-4 shadow-sm ring-1 ring-slate-900/5">
-      <div className="mb-3 flex items-center gap-2">
-        <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
-        <p className="text-xs font-semibold text-slate-800">Loading PDF</p>
+    <div
+      style={{
+        borderRadius: 12,
+        border: `1px solid ${C.border}`,
+        background: `linear-gradient(180deg, #ffffff 0%, ${C.paper} 100%)`,
+        padding: 16,
+        boxShadow: "0 4px 16px rgba(26,39,68,0.06)",
+        fontFamily: fontBody,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <span
+          style={{
+            width: 6, height: 6, borderRadius: "50%", background: C.gold,
+            animation: "pdfDocLoadPulse 1.4s ease-in-out infinite",
+          }}
+        />
+        <p style={{ fontFamily: fontSerif, fontSize: 13, fontWeight: 700, color: C.navy }}>Turning the page…</p>
       </div>
-      <p className="mb-3 text-[11px] leading-relaxed text-slate-500">{detail}</p>
-      <div className="mb-1.5 flex items-center justify-end text-[11px] font-medium tabular-nums text-slate-600">
+      <p style={{ marginBottom: 10, fontSize: 11, fontStyle: "italic", lineHeight: 1.6, color: C.muted }}>{detail}</p>
+      <div style={{ marginBottom: 6, display: "flex", justifyContent: "flex-end", fontSize: 11, fontWeight: 600, color: C.muted, fontVariantNumeric: "tabular-nums" }}>
         <span aria-live="polite">{percent !== null ? `${percent}%` : formatBytes(fetchLoaded)}</span>
       </div>
       <div
-        className="relative h-2 w-full overflow-hidden rounded-full bg-slate-200/90"
         role="progressbar"
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={percent ?? undefined}
         aria-valuetext={percent !== null ? `${percent}%` : detail}
         aria-busy
+        style={{ position: "relative", height: 6, width: "100%", overflow: "hidden", borderRadius: 999, background: "#ece3d3" }}
       >
         <div
-          className="h-full rounded-full bg-gradient-to-r from-sky-500 via-blue-500 to-blue-600 shadow-sm transition-[width] duration-150 ease-out"
-          style={{ width: `${barWidth}%` }}
+          style={{
+            height: "100%", borderRadius: 999,
+            background: `linear-gradient(90deg, ${C.gold}, #dba15a)`,
+            transition: "width 150ms ease-out",
+            width: `${barWidth}%`,
+          }}
         />
       </div>
+      <style jsx>{`
+        @keyframes pdfDocLoadPulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.4; transform: scale(1.4); }
+        }
+      `}</style>
     </div>
   );
 }

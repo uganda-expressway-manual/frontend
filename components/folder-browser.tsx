@@ -28,6 +28,8 @@ const C = {
 
 const BOOKS_PER_SHELF = 5;
 const PAGE_CHUNK_SIZE = 5;
+/** Pick-up + open exit animation before navigating into a folder (see BookSpine `transform`/`opacity`). */
+const FOLDER_OPEN_MS = 420;
 
 /** Same idea as folder interior: dim spines that do not match the search string (folder name or any PDF filename). */
 function folderMatchesFileNameFilter(folder: Folder, query: string): boolean {
@@ -564,7 +566,7 @@ function Shelf({
     setPullingId(folder.id);
     setTimeout(() => {
       router.push(`/folders/${folder.id}`);
-    }, 220);
+    }, FOLDER_OPEN_MS);
   };
 
   return (
@@ -702,14 +704,16 @@ function BookSpine({
   const H = BOOK_SPINE_H;
 
   const transform =
-    isPulling ? "translateY(-60px)" :
+    isPulling ? "translateY(-96px) scale(1.16) rotateZ(-3deg)" :
       isHovered ? (isTouch ? "scale(1.03)" : "translateZ(20px) translateY(-20px)") :
         isDragOver ? "translateY(-12px)" :
           "none";
   const shadow =
-    isHovered
-      ? "-4px 10px 24px rgba(0,0,0,0.32), inset -4px 0 8px rgba(0,0,0,0.18)"
-      : "-2px 4px 10px rgba(0,0,0,0.18), inset -4px 0 8px rgba(0,0,0,0.12)";
+    isPulling
+      ? "-6px 22px 46px rgba(0,0,0,0.30), 0 0 44px 8px rgba(201,124,42,0.28)"
+      : isHovered
+        ? "-4px 10px 24px rgba(0,0,0,0.32), inset -4px 0 8px rgba(0,0,0,0.18)"
+        : "-2px 4px 10px rgba(0,0,0,0.18), inset -4px 0 8px rgba(0,0,0,0.12)";
 
   const openReferenceSpine = !folderSealed;
 
@@ -729,14 +733,32 @@ function BookSpine({
           position: "relative",
           display: "flex",
           cursor: isLocked && !admin ? "not-allowed" : "pointer",
-          opacity: isDragged ? 0.35 : 1,
-          transition: "transform 150ms ease-out, box-shadow 150ms, opacity 200ms",
+          opacity: isPulling ? 0 : isDragged ? 0.35 : 1,
+          transition: isPulling
+            ? "transform 420ms cubic-bezier(0.22,0.61,0.36,1), opacity 420ms ease 140ms, box-shadow 300ms ease"
+            : "transform 150ms ease-out, box-shadow 150ms, opacity 200ms",
           transform,
         }}
         onMouseEnter={onHoverIn}
         onMouseLeave={onHoverOut}
         onClick={onClick}
       >
+        {/* Warm glow suggesting the folder opening as the book lifts off the shelf */}
+        {isPulling && (
+          <div
+            aria-hidden
+            style={{
+              position: "absolute",
+              inset: "-40px -30px",
+              borderRadius: "50%",
+              background: "radial-gradient(circle, rgba(201,124,42,0.35) 0%, rgba(201,124,42,0) 70%)",
+              opacity: 1,
+              animation: "libraryOpenGlow 420ms ease-out forwards",
+              pointerEvents: "none",
+              zIndex: -1,
+            }}
+          />
+        )}
         {/* Main spine face */}
         <div
           style={{

@@ -43,6 +43,8 @@ const fontSerif = "'Source Serif 4', Georgia, serif";
 const fontDisplay = "'Playfair Display', 'Times New Roman', serif";
 
 const BOOKS_PER_SHELF = 5;
+/** Pick-up + open exit animation before navigating into the PDF viewer (see Book3D `bookTransform`). */
+const FILE_OPEN_MS = 380;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -199,12 +201,12 @@ function Book3D({
   const handleClick = () => {
     if (departing) return;
     setDeparting(true);
-    setTimeout(() => router.push(`/files/${file.id}`), 200);
+    setTimeout(() => router.push(`/files/${file.id}`), FILE_OPEN_MS);
   };
 
   // ── Render ──
   const bookTransform = departing
-    ? "perspective(800px) rotateY(8deg) translateY(-40px) scale(0.96)"
+    ? "perspective(900px) rotateY(42deg) translateY(-52px) translateZ(70px) scale(1.2)"
     : hovered
       ? "perspective(800px) rotateY(4deg) translateY(-12px) translateZ(16px)"
       : "perspective(800px) rotateY(8deg)";
@@ -259,6 +261,22 @@ function Book3D({
         </div>
       )}
 
+      {/* Warm glow suggesting the book opening as it lifts off the shelf */}
+      {departing && (
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: "-50px -40px",
+            borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(201,124,42,0.38) 0%, rgba(201,124,42,0) 70%)",
+            animation: "libraryOpenGlow 380ms ease-out forwards",
+            pointerEvents: "none",
+            zIndex: -1,
+          }}
+        />
+      )}
+
       {/* ── 3D Book ── */}
       <div
         ref={bookRef}
@@ -285,7 +303,7 @@ function Book3D({
             : "drop-shadow(4px 8px 16px rgba(0,0,0,0.22))",
           opacity: departing ? 0 : isReorderDragged ? 0.42 : 1,
           transition: departing
-            ? "transform 200ms ease-in, opacity 200ms ease-in"
+            ? `transform ${FILE_OPEN_MS}ms cubic-bezier(0.22,0.61,0.36,1), opacity ${FILE_OPEN_MS}ms ease 120ms`
             : "transform 300ms cubic-bezier(0.25,0.46,0.45,0.94), filter 300ms ease, opacity 200ms ease",
         }}
       >
@@ -676,6 +694,13 @@ export function ListView({
   const [draggingFileId, setDraggingFileId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
+  const [openingId, setOpeningId] = useState<string | null>(null);
+
+  const openFile = (fileId: string) => {
+    if (openingId) return;
+    setOpeningId(fileId);
+    setTimeout(() => router.push(`/files/${fileId}`), 260);
+  };
 
   const filtered = files.filter(f =>
     !searchQuery.trim() || f.filename.toLowerCase().includes(searchQuery.toLowerCase())
@@ -735,14 +760,15 @@ export function ListView({
               display: "flex", alignItems: "center", gap: 12,
               padding: "12px 16px",
               borderBottom: idx < filtered.length - 1 ? `1px solid ${C.border}` : "none",
-              background: hoveredId === file.id ? "rgba(201,124,42,0.04)" : "#fff",
-              transition: "background 150ms ease",
+              background: openingId === file.id ? "rgba(201,124,42,0.10)" : hoveredId === file.id ? "rgba(201,124,42,0.04)" : "#fff",
+              transform: openingId === file.id ? "scale(0.99)" : "scale(1)",
+              transition: "background 150ms ease, transform 220ms ease, opacity 220ms ease",
               cursor: renamingId === file.id ? "default" : "pointer",
-              opacity: draggingFileId === file.id ? 0.45 : 1,
+              opacity: draggingFileId === file.id ? 0.45 : openingId && openingId !== file.id ? 0.5 : 1,
             }}
             onClick={() => {
               if (renamingId === file.id) return;
-              router.push(`/files/${file.id}`);
+              openFile(file.id);
             }}
           >
             {allowReorder && (

@@ -469,3 +469,14 @@ section.pdf-viewer-fullscreen-host:-webkit-full-screen {
   from { opacity: 0; transform: translateY(24px); }
   to   { opacity: 1; transform: translateY(0);    }
 }
+
+/** Warm glow behind a book/folder as it lifts off the shelf and opens (see folder-browser.tsx, folder-bookshelf.tsx). */
+@keyframes libraryOpenGlow {
+  0%   { opacity: 0;   transform: scale(0.6); }
+  55%  { opacity: 1;   transform: scale(1.05); }
+  100% { opacity: 0.85; transform: scale(1.25); }
+}
+
+@keyframes folderSpinnerSpin {
+  to { transform: rotate(360deg); }
+}

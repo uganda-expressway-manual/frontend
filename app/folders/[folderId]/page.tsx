@@ -73,6 +73,8 @@ export default function FolderPage() {
   const [viewMode,          setViewMode]          = useState<ViewMode>("bookshelf");
   /** Admin delete: confirm before removing a volume from the folder. */
   const [filePendingDelete, setFilePendingDelete] = useState<FolderFile | null>(null);
+  /** Drives the "book opening into view" entrance transition once the folder data is ready. */
+  const [contentSettled, setContentSettled] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadUi, setUploadUi] = useState<{
     phase: UploadUiPhase; percent: number; indeterminate: boolean; fileCount: number;
@@ -180,6 +182,12 @@ export default function FolderPage() {
   useEffect(() => { setFolderSearch(urlKeyword); }, [urlKeyword]);
 
   useEffect(() => {
+    if (!folder) return;
+    const raf = requestAnimationFrame(() => setContentSettled(true));
+    return () => cancelAnimationFrame(raf);
+  }, [folder]);
+
+  useEffect(() => {
     if (uploadUi.phase !== "done") return;
     const t = window.setTimeout(() => {
       setUploadUi({ phase: "idle", percent: 0, indeterminate: false, fileCount: 0 });
@@ -218,8 +226,19 @@ export default function FolderPage() {
   // ── Early returns ──
   if (folderQuery.isLoading) {
     return (
-      <div style={{ padding: "48px 24px", fontFamily: fontSerif, color: C.muted, fontSize: 14 }}>
-        Loading folder…
+      <div style={{
+        minHeight: "60vh",
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        gap: 14, padding: "48px 24px",
+      }}>
+        <div style={{
+          width: 34, height: 34, borderRadius: "50%",
+          border: `2.5px solid ${C.border}`, borderTopColor: C.gold,
+          animation: "folderSpinnerSpin 850ms linear infinite",
+        }} />
+        <p style={{ fontFamily: fontDisplay, fontSize: 15, fontStyle: "italic", color: C.muted }}>
+          Opening folder…
+        </p>
       </div>
     );
   }
@@ -277,6 +296,9 @@ export default function FolderPage() {
           minHeight: "100vh",
           padding: "0 0 64px",
           position: "relative",
+          opacity: contentSettled ? 1 : 0,
+          transform: contentSettled ? "translateY(0) scale(1)" : "translateY(14px) scale(0.99)",
+          transition: "opacity 380ms ease-out, transform 380ms ease-out",
         }}
         onDragOver={(e)  => { if (!admin || uploadBlockedForUser) return; e.preventDefault(); }}
         onDragEnter={(e) => {

@@ -36,10 +36,15 @@ import "react-pdf/dist/Page/TextLayer.css";
 const PDFViewer = dynamic(() => import("@/components/pdf-viewer").then((mod) => mod.PDFViewer), {
   ssr: false,
   loading: () => (
-    <div className="rounded-xl border border-slate-200/90 bg-slate-50/80 px-4 py-6 text-center">
-      <p className="text-sm font-medium text-slate-600">Preparing viewer…</p>
-      <div className="mx-auto mt-3 h-1.5 max-w-[200px] overflow-hidden rounded-full bg-slate-200">
-        <div className="h-full w-1/3 animate-pulse rounded-full bg-blue-500/80" />
+    <div
+      className="rounded-xl px-4 py-6 text-center"
+      style={{ border: "1px solid #d0c4aa", background: "linear-gradient(135deg, #efe5dc 0%, #f8f3ee 48%, #e8ddd0 100%)" }}
+    >
+      <p style={{ fontFamily: "'Source Serif 4', Georgia, serif", fontSize: 13, fontStyle: "italic", color: "#8a7a60" }}>
+        Preparing viewer…
+      </p>
+      <div className="mx-auto mt-3 h-1.5 max-w-[200px] overflow-hidden rounded-full" style={{ background: "#e8ddd0" }}>
+        <div className="h-full w-1/3 animate-pulse rounded-full" style={{ background: "#c97c2a" }} />
       </div>
     </div>
   ),
@@ -126,7 +131,7 @@ export default function FileViewerPage() {
   const [isPseudoFullscreen, setIsPseudoFullscreen] = useState(false);
   const [bookmarkColor, setBookmarkColor] = useState<BookmarkColorId>("silver");
   const [pageTone, setPageTone] = useState<PageToneId>("white");
-  const [coverTone, setCoverTone] = useState<CoverToneId>("slate");
+  const [coverTone, setCoverTone] = useState<CoverToneId>("stone");
   const [highlightColor, setHighlightColor] = useState<HighlightColorId>("yellow");
   const [hoveredPanel, setHoveredPanel] = useState<PopoverPanelId>(null);
   const [pinnedPanel, setPinnedPanel] = useState<PopoverPanelId>(null);
@@ -145,6 +150,20 @@ export default function FileViewerPage() {
   const lastTapTimeRef = useRef(0);
   const hideFullscreenMenuTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isFullscreen = isNativeFullscreen || isPseudoFullscreen;
+
+  /** Continues the "picking up the book and opening it" motion from the shelf into this page. */
+  const [pageMounted, setPageMounted] = useState(false);
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setPageMounted(true));
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  const entranceStyle = !isFullscreen
+    ? {
+        opacity: pageMounted ? 1 : 0,
+        transform: pageMounted ? "translateY(0) scale(1)" : "translateY(16px) scale(0.985)",
+        transition: "opacity 380ms ease-out, transform 380ms ease-out",
+      }
+    : undefined;
 
   const [fileFetchProgress, setFileFetchProgress] = useState<{ loaded: number; total: number | null } | null>(null);
 
@@ -332,7 +351,7 @@ export default function FileViewerPage() {
   useEffect(() => {
     const storedCoverTone = window.localStorage.getItem(getCoverToneStorageKey(fileId));
     if (!storedCoverTone || !isCoverToneId(storedCoverTone)) {
-      setCoverTone("slate");
+      setCoverTone("stone");
       return;
     }
     setCoverTone(storedCoverTone);
@@ -501,7 +520,7 @@ export default function FileViewerPage() {
 
   if (fileQuery.isLoading) {
     return (
-      <section className="mx-auto w-full max-w-2xl py-8">
+      <section className="mx-auto w-full max-w-2xl py-8" style={entranceStyle}>
         <PdfViewerPageLoading
           fileMetadataLoaded={false}
           pdfBytesFetched={false}
@@ -540,7 +559,7 @@ export default function FileViewerPage() {
 
   if (!viewerPdfSrc) {
     return (
-      <section className="mx-auto w-full max-w-2xl py-8">
+      <section className="mx-auto w-full max-w-2xl py-8" style={entranceStyle}>
         <PdfViewerPageLoading
           fileMetadataLoaded
           pdfBytesFetched={false}
@@ -733,6 +752,7 @@ export default function FileViewerPage() {
       ref={viewerSectionRef}
       onDoubleClick={onFullscreenSurfaceDoubleActivate}
       onTouchEndCapture={onFullscreenTouchEndCapture}
+      style={entranceStyle}
       className={[
         "pdf-viewer-fullscreen-host",
         !isFullscreen ? "space-y-4" : "",
