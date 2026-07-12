@@ -2,6 +2,16 @@
 
 import { useEffect } from "react";
 
+const fontSerif = "'Playfair Display', Georgia, serif";
+const fontBody = "'Source Serif 4', Georgia, serif";
+const C = {
+  navy: "#1a2744",
+  gold: "#c97c2a",
+  paper: "#faf8f3",
+  border: "#d0c4aa",
+  muted: "#8a7a60",
+};
+
 interface AdminActionLoadingOverlayProps {
   open: boolean;
   message: string;
@@ -26,20 +36,46 @@ export function AdminActionLoadingOverlay({ open, message }: AdminActionLoadingO
 
   return (
     <div
-      className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-[3px]"
       role="status"
       aria-live="polite"
       aria-busy="true"
       aria-label={message}
+      style={{
+        position: "fixed", inset: 0, zIndex: 110,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: 16,
+        background: "rgba(26,39,68,0.45)",
+        backdropFilter: "blur(3px)",
+      }}
     >
-      <div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-2xl border border-slate-200/90 bg-white px-8 py-10 shadow-[0_20px_50px_rgba(15,23,42,0.2)]">
+      <div style={{
+        display: "flex", flexDirection: "column", alignItems: "center", gap: 16,
+        width: "100%", maxWidth: 340,
+        borderRadius: 14, border: `1px solid ${C.border}`,
+        background: `linear-gradient(180deg, #ffffff 0%, ${C.paper} 100%)`,
+        padding: "36px 30px",
+        boxShadow: "0 20px 50px rgba(15,23,42,0.22)",
+      }}>
         <div
-          className="h-11 w-11 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-900"
           aria-hidden
+          style={{
+            width: 42, height: 42, borderRadius: "50%",
+            border: `3px solid ${C.border}`, borderTopColor: C.gold,
+            animation: "adminOverlaySpin 750ms linear infinite",
+          }}
         />
-        <p className="text-center text-base font-medium text-slate-900">{message}</p>
-        <p className="text-center text-sm text-slate-500">Please wait…</p>
+        <p style={{ fontFamily: fontSerif, fontSize: 16, fontWeight: 700, color: C.navy, textAlign: "center" }}>
+          {message}
+        </p>
+        <p style={{ fontFamily: fontBody, fontSize: 12.5, fontStyle: "italic", color: C.muted, textAlign: "center" }}>
+          Please wait…
+        </p>
       </div>
+      <style jsx>{`
+        @keyframes adminOverlaySpin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }

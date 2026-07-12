@@ -14,6 +14,7 @@ import {
   listChats,
   patchChatMessage,
   postChatbotMessage,
+  postFolderQuery,
   updateChat,
   type ChatModelOption,
 } from "@/lib/api";
@@ -483,7 +484,11 @@ export function DocumentChatWidget({
       chatId: string;
       pendingUserMessageId: string;
     }) => {
-      const data = await postChatbotMessage({ chatId, text });
+      // Folder-scoped chats are grounded in that folder's PDFs via the RAG file-search endpoint;
+      // the general chatbot endpoint is used everywhere else (no folder context).
+      const data = folderId
+        ? await postFolderQuery(folderId, { chatId, text })
+        : await postChatbotMessage({ chatId, text });
       return {
         ...resolveChatbotResponse(data),
         requestId,
@@ -618,6 +623,7 @@ export function DocumentChatWidget({
     setAssistantTyping(null);
   };
 
+  const waitingMessage = useWaitingChatMessage(chatMutation.isPending);
   const isConversationRunning = chatMutation.isPending || Boolean(assistantTyping);
   const inputEmpty = !chatInput.trim();
   const selectedModelLabel =
@@ -1253,14 +1259,30 @@ export function DocumentChatWidget({
                 );
               })}
 
-              {/* "Consulting the archive…" loading state */}
+              {/* Waiting for the AI's answer — rotates through reassuring phrases the longer it takes */}
               {hasActiveChatroom && chatMutation.isPending && (
-                <p className="lib-consulting-text" style={{
-                  fontFamily: fontBody, fontSize: 12, fontStyle: "italic",
-                  color: C.muted, margin: 0, paddingLeft: 14,
-                }}>
-                  Consulting the archive…
-                </p>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 14 }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }} aria-hidden>
+                    {[0, 1, 2].map((i) => (
+                      <span key={i} style={{
+                        width: 4, height: 4, borderRadius: "50%", background: C.gold,
+                        animation: `uploadDotPulse 1s ease-in-out ${i * 0.15}s infinite`,
+                      }} />
+                    ))}
+                  </span>
+                  <p
+                    key={waitingMessage}
+                    role="status"
+                    aria-live="polite"
+                    style={{
+                      fontFamily: fontBody, fontSize: 12, fontStyle: "italic",
+                      color: C.muted, margin: 0,
+                      animation: "chatWaitingFadeIn 320ms ease",
+                    }}
+                  >
+                    {waitingMessage}
+                  </p>
+                </div>
               )}
             </div>
           </div>
@@ -1775,6 +1797,33 @@ function TextareaWithFocus({
 TextareaWithFocus.displayName = "TextareaWithFocus";
 
 /* ── Utility functions (unchanged logic) ── */
+
+const WAITING_MESSAGES = [
+  "Consulting the archive…",
+  "Searching through the pages…",
+  "Cross-referencing your manuals…",
+  "Almost there…",
+  "Still working on it — thanks for your patience…",
+];
+
+/**
+ * Rotates through reassuring phrases the longer an answer takes, instead of one static line —
+ * folder RAG lookups can legitimately take 15-25s, and visible progress reads as "still working"
+ * rather than "stuck" (see the backend's `/folders/:folderId/query` Gemini file-search endpoint).
+ */
+function useWaitingChatMessage(active: boolean): string {
+  const [index, setIndex] = useState(0);
+  useEffect(() => {
+    if (!active) {
+      setIndex(0);
+      return;
+    }
+    const stepTimesMs = [4000, 9000, 15000, 24000];
+    const timers = stepTimesMs.map((delay, i) => window.setTimeout(() => setIndex(i + 1), delay));
+    return () => timers.forEach((t) => window.clearTimeout(t));
+  }, [active]);
+  return WAITING_MESSAGES[Math.min(index, WAITING_MESSAGES.length - 1)];
+}
 
 function isEditableUserMessage(messageId: string): boolean {
   return !messageId.startsWith("pending-user-") && !messageId.endsWith("-assistant-error");

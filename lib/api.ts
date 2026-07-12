@@ -761,6 +761,21 @@ export async function postChatbotMessage(payload: ChatbotMessagePayload): Promis
   return data;
 }
 
+export type FolderQueryPayload = {
+  chatId: string;
+  text: string;
+};
+
+/**
+ * POST `/folders/:folderId/query` — folder-scoped RAG Q&A grounded in that folder's PDFs
+ * (Gemini File Search Store). The answer (with a "Sources:" block appended) is saved onto
+ * `chatId` server-side, same as `postChatbotMessage`, so the response shape is compatible.
+ */
+export async function postFolderQuery(folderId: string, payload: FolderQueryPayload): Promise<unknown> {
+  const { data } = await api.post<unknown>(`/folders/${encodeURIComponent(folderId)}/query`, payload);
+  return data;
+}
+
 /** PATCH `/chat/:chatId/message/:messageId` — edit a user message. */
 export async function patchChatMessage(
   chatId: string,

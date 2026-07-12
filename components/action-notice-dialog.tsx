@@ -2,6 +2,16 @@
 
 import { useEffect } from "react";
 
+const fontSerif = "'Playfair Display', Georgia, serif";
+const fontBody = "'Source Serif 4', Georgia, serif";
+const C = {
+  navy: "#1a2744",
+  gold: "#c97c2a",
+  paper: "#faf8f3",
+  border: "#d0c4aa",
+  muted: "#8a7a60",
+};
+
 interface ActionNoticeDialogProps {
   open: boolean;
   title: string;
@@ -40,28 +50,43 @@ export function ActionNoticeDialog({ open, title, message, onClose }: ActionNoti
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
       <button
         type="button"
-        className="absolute inset-0 bg-slate-900/45 backdrop-blur-[2px]"
         aria-label="Dismiss"
         onClick={onClose}
+        style={{
+          position: "absolute", inset: 0, border: "none", cursor: "pointer",
+          background: "rgba(26,39,68,0.42)", backdropFilter: "blur(2px)",
+        }}
       />
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="action-notice-title"
-        className="relative z-10 w-full max-w-md rounded-2xl border border-slate-200/95 bg-white p-6 shadow-[0_16px_48px_rgba(15,23,42,0.15)]"
+        style={{
+          position: "relative", zIndex: 10, width: "100%", maxWidth: 400,
+          borderRadius: 10, border: `1px solid ${C.border}`,
+          background: C.paper, padding: 24,
+          boxShadow: "0 16px 48px rgba(15,23,42,0.20)",
+          fontFamily: fontBody,
+        }}
       >
-        <h2 id="action-notice-title" className="text-lg font-semibold tracking-tight text-slate-900">
+        <h2 id="action-notice-title" style={{ fontFamily: fontSerif, fontSize: 18, fontWeight: 700, color: C.navy }}>
           {title}
         </h2>
-        <p className="mt-2 text-[15px] leading-relaxed text-slate-600">{message}</p>
-        <div className="mt-6 flex justify-end">
+        <p style={{ marginTop: 8, fontSize: 14, lineHeight: 1.55, color: C.muted }}>{message}</p>
+        <div style={{ marginTop: 22, display: "flex", justifyContent: "flex-end" }}>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+            style={{
+              borderRadius: 999, border: "none", background: C.navy,
+              padding: "8px 20px", fontFamily: fontBody, fontSize: 13, fontWeight: 600, color: "#fff",
+              cursor: "pointer", transition: "background 180ms",
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = C.gold; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = C.navy; }}
           >
             OK
           </button>

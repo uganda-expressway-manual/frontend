@@ -113,7 +113,7 @@ export function PDFViewer({
   highlightEnabled = true,
   bookmarkColor = "silver",
   pageTone = "white",
-  coverTone = "stone",
+  coverTone = "slate",
   isFullscreen = false,
   previewMode = false,
   onCurrentPageChange,
@@ -1002,7 +1002,7 @@ export function PDFViewer({
           !isZoomedDocument ? "touch-pan-y" : "",
           isFullscreen
             ? "flex h-full min-h-0 flex-1 flex-col rounded-none border-0 bg-white p-0"
-            : "mx-auto h-auto max-w-[1120px] rounded-2xl border border-[#d0c4aa] p-3 shadow-inner lg:h-[760px] lg:p-4",
+            : "mx-auto h-auto max-w-[1120px] rounded-2xl border border-slate-200 p-3 shadow-inner lg:h-[760px] lg:p-4",
         ].join(" ")}
         style={{
           touchAction: isSinglePageFullscreen ? "auto" : undefined,
@@ -1144,10 +1144,10 @@ export function PDFViewer({
         }}
       >
         {!isSinglePageView && !fullscreenSpreadCombinedZoom && (
-          <div className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-[#c9bfa8]/70" />
+          <div className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-slate-300/70" />
         )}
         {!isSinglePageView && !fullscreenSpreadCombinedZoom && (
-          <div className="pointer-events-none absolute inset-y-0 left-1/2 w-10 -translate-x-1/2 bg-gradient-to-r from-[#c9bfa8]/25 via-[#a07848]/25 to-[#c9bfa8]/25 blur-lg" />
+          <div className="pointer-events-none absolute inset-y-0 left-1/2 w-10 -translate-x-1/2 bg-gradient-to-r from-slate-300/25 via-slate-400/30 to-slate-300/25 blur-lg" />
         )}
         {showZoomUi && (
           <div
@@ -1162,12 +1162,12 @@ export function PDFViewer({
               "z-50 flex items-center rounded-full border shadow-sm backdrop-blur",
               pdfZoomChromePack ? "" : "gap-1.5 px-1.5 py-1",
               isFullscreen && pinchZoomScale > MIN_ZOOM
-                ? "fixed right-[max(0.75rem,env(safe-area-inset-right,0px))] top-[max(0.75rem,env(safe-area-inset-top,0px))] border-[#d0c4aa] bg-[#faf8f3]/95 text-[#1a2744] shadow-sm"
+                ? "fixed right-[max(0.75rem,env(safe-area-inset-right,0px))] top-[max(0.75rem,env(safe-area-inset-top,0px))] border-slate-300 bg-white/95 text-slate-800 shadow-sm"
                 : [
                     "absolute",
                     isFullscreen
-                      ? "right-[max(0.75rem,env(safe-area-inset-right,0px))] top-[max(0.75rem,env(safe-area-inset-top,0px))] border-[#d0c4aa] bg-[#faf8f3]/95 text-[#1a2744] shadow-sm"
-                      : "right-3 top-3 border-[#d0c4aa] bg-[#faf8f3]/95 text-[#1a2744]",
+                      ? "right-[max(0.75rem,env(safe-area-inset-right,0px))] top-[max(0.75rem,env(safe-area-inset-top,0px))] border-slate-300 bg-white/95 text-slate-800 shadow-sm"
+                      : "right-3 top-3 border-slate-300 bg-white/95 text-slate-800",
                   ].join(" "),
             ].join(" ")}
           >
@@ -1190,7 +1190,7 @@ export function PDFViewer({
               style={pdfZoomChromePack?.circleBtn}
               className={[
                 "flex shrink-0 items-center justify-center rounded-full font-semibold leading-none transition",
-                "hover:bg-[rgba(201,124,42,0.12)] disabled:text-[#c9bfa8]",
+                "hover:bg-slate-100 disabled:text-slate-300",
                 pdfZoomChromePack ? "" : "h-[28px] w-[28px] text-sm",
               ]
                 .filter(Boolean)
@@ -1205,7 +1205,7 @@ export function PDFViewer({
               onClick={resetZoom}
               style={pdfZoomChromePack?.pctBtn}
               className={[
-                "rounded-full font-semibold leading-none transition hover:bg-[rgba(201,124,42,0.12)]",
+                "rounded-full font-semibold leading-none transition hover:bg-slate-100",
                 pdfZoomChromePack ? "" : "min-w-[2.375rem] px-2.5 py-1 text-[11px]",
               ]
                 .filter(Boolean)
@@ -1222,7 +1222,7 @@ export function PDFViewer({
               style={pdfZoomChromePack?.circleBtn}
               className={[
                 "flex shrink-0 items-center justify-center rounded-full font-semibold leading-none transition",
-                "hover:bg-[rgba(201,124,42,0.12)] disabled:text-[#c9bfa8]",
+                "hover:bg-slate-100 disabled:text-slate-300",
                 pdfZoomChromePack ? "" : "h-[28px] w-[28px] text-sm",
               ]
                 .filter(Boolean)
@@ -1291,21 +1291,21 @@ export function PDFViewer({
               defaultHighlightColor={defaultHighlightColor}
             />
           ) : fullscreenSpreadCombinedZoom ? null : (
-            <div className={["hidden lg:block", isFullscreen ? "min-h-0 bg-white" : "rounded-xl border border-dashed border-[#d0c4aa] bg-[#faf8f3]/70"].join(" ")} />
+            <div className={["hidden lg:block", isFullscreen ? "min-h-0 bg-white" : "rounded-xl border border-dashed border-slate-300 bg-white/70"].join(" ")} />
           )}
         </div>
 
         {flipDirection && (
           <div
             className={[
-              "pointer-events-none absolute top-4 hidden h-[calc(100%-2rem)] w-[calc(50%-1rem)] overflow-hidden rounded-xl border border-[#d0c4aa] bg-[#faf8f3] shadow-2xl lg:block",
+              "pointer-events-none absolute top-4 hidden h-[calc(100%-2rem)] w-[calc(50%-1rem)] overflow-hidden rounded-xl border border-slate-300 bg-white shadow-2xl lg:block",
               flipDirection === "next"
                 ? "right-4 origin-left animate-[bookFlipNext_460ms_ease-in-out_forwards]"
                 : "left-4 origin-right animate-[bookFlipPrev_460ms_ease-in-out_forwards]",
             ].join(" ")}
           >
-            <div className="absolute inset-0 bg-gradient-to-r from-[#efe6d8] via-[#faf8f3] to-[#efe6d8]" />
-            <div className="absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-[#1a2744]/15 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-r from-slate-100 via-white to-slate-100" />
+            <div className="absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-slate-500/20 to-transparent" />
           </div>
         )}
 
@@ -1366,11 +1366,11 @@ export function PDFViewer({
             type="button"
             onClick={goToPrevSpread}
             disabled={!canFlipPrev || Boolean(flipDirection)}
-            className="rounded-md border border-[#d0c4aa] bg-white px-3 py-1.5 text-xs font-medium text-[#1a2744] transition hover:bg-[rgba(201,124,42,0.08)] disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {isSinglePageView ? "Previous page" : "Previous spread"}
           </button>
-          <p className="text-xs text-[#8a7a60]">
+          <p className="text-xs text-slate-500">
             {isSinglePageView
               ? "Tap left/right side, swipe, or use buttons to navigate pages"
               : "Scroll or click left/right page edges to flip"}
@@ -1379,7 +1379,7 @@ export function PDFViewer({
             type="button"
             onClick={goToNextSpread}
             disabled={!canFlipNext || Boolean(flipDirection)}
-            className="rounded-md border border-[#d0c4aa] bg-white px-3 py-1.5 text-xs font-medium text-[#1a2744] transition hover:bg-[rgba(201,124,42,0.08)] disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {isSinglePageView ? "Next page" : "Next spread"}
           </button>
@@ -1645,7 +1645,7 @@ function BookPage({
   return (
     <div
       className={[
-        "group relative flex min-w-0 max-w-full flex-col rounded-xl border border-[#d0c4aa] p-2 shadow-sm transition hover:shadow-md",
+        "group relative flex min-w-0 max-w-full flex-col rounded-xl border border-slate-200 p-2 shadow-sm transition hover:shadow-md",
         isFullscreen && isZoomed ? "overflow-visible" : "overflow-hidden",
         isFullscreen
           ? fullscreenSpreadStrip
@@ -1709,12 +1709,12 @@ function BookPage({
     >
       {!isFullscreen && (
         <div className="mb-2 px-1">
-          <p className="text-xs font-medium text-[#8a7a60]">Page {pageNumber}</p>
+          <p className="text-xs font-medium text-slate-500">Page {pageNumber}</p>
         </div>
       )}
       <div
         className={[
-          "relative flex items-start rounded-md border border-[#d0c4aa]",
+          "relative flex items-start rounded-md border border-slate-200",
           /* Centered layout looks nicer at 1×; when zoomed, centering overflows left of the scroll
            origin so scrollLeft≥0 cannot reveal it — align start so overflow is pan-scrollable. */
           isFullscreen && isZoomed ? "justify-start" : "justify-center",
@@ -1770,7 +1770,7 @@ function BookPage({
         <div
           className={[
             "pointer-events-none absolute inset-y-0 w-14 bg-gradient-to-r opacity-0 transition group-hover:opacity-100",
-            isRightPage ? "right-0 from-transparent to-[#c9bfa8]/30" : "left-0 from-[#c9bfa8]/30 to-transparent",
+            isRightPage ? "right-0 from-transparent to-slate-300/30" : "left-0 from-slate-300/30 to-transparent",
           ].join(" ")}
         />
       )}

@@ -26,25 +26,45 @@ export default function ManageUsersPage() {
     }
   }, [auth, router, token, user]);
 
+  const loadingWrap = (message: string) => (
+    <div style={{ padding: "48px 24px", fontFamily: "'Source Serif 4', Georgia, serif", fontStyle: "italic", color: "#8a7a60", fontSize: 14 }}>
+      {message}
+    </div>
+  );
+
   if (hasAuthSession(auth) && token && !user) {
-    return <p className="text-sm text-slate-600">Loading profile...</p>;
+    return loadingWrap("Loading profile…");
   }
 
   if (!hasAuthSession(auth)) {
-    return <p className="text-sm text-slate-600">Checking session…</p>;
+    return loadingWrap("Checking session…");
   }
 
   if (!user || !isAdminUser(user)) {
-    return <p className="text-sm text-slate-600">Admin access required.</p>;
+    return loadingWrap("Admin access required.");
   }
 
   return (
-    <div className="space-y-4">
+    <div style={{ maxWidth: 1080, margin: "0 auto", padding: "24px 16px 0" }}>
       <Link
         href="/dashboard"
-        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm transition hover:bg-slate-50"
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 8,
+          fontFamily: "'Source Serif 4', Georgia, serif", fontSize: 13, fontWeight: 600, color: "#1a2744",
+          background: "#fff", border: "1px solid #d0c4aa", borderRadius: 999,
+          padding: "8px 16px", marginBottom: 20, textDecoration: "none",
+          boxShadow: "0 1px 3px rgba(26,39,68,0.06)", transition: "border-color 150ms, box-shadow 150ms",
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLAnchorElement).style.borderColor = "#c97c2a";
+          (e.currentTarget as HTMLAnchorElement).style.boxShadow = "0 2px 8px rgba(201,124,42,0.14)";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLAnchorElement).style.borderColor = "#d0c4aa";
+          (e.currentTarget as HTMLAnchorElement).style.boxShadow = "0 1px 3px rgba(26,39,68,0.06)";
+        }}
       >
-        <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+        <svg viewBox="0 0 24 24" aria-hidden width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M15 18l-6-6 6-6" />
         </svg>
         Back to dashboard

@@ -124,6 +124,8 @@ function Book3D({
   onReorderDragOver,
   onReorderDragLeave,
   onReorderDrop,
+  isNewlyUploaded = false,
+  onThumbSettled,
 }: {
   file: FolderFile;
   isAdmin: boolean;
@@ -139,15 +141,21 @@ function Book3D({
   onReorderDragOver?: (e: DragEvent<HTMLDivElement>) => void;
   onReorderDragLeave?: (e: DragEvent<HTMLDivElement>) => void;
   onReorderDrop?: (e: DragEvent<HTMLDivElement>) => void;
+  /** Just uploaded this session: skip lazy-load gating and show an "arriving" highlight until the thumbnail settles. */
+  isNewlyUploaded?: boolean;
+  /** Fired once when the thumbnail finishes loading (ready or error) — lets the caller end its upload animation. */
+  onThumbSettled?: (fileId: string) => void;
 }) {
   const router = useRouter();
   const bookRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const settledNotifiedRef = useRef(false);
 
   const [thumb, setThumb] = useState<ThumbState>({ phase: "idle" });
   const [hovered, setHovered] = useState(false);
   const [showTip, setShowTip] = useState(false);
   const [departing, setDeparting] = useState(false);
+  const [justArrived, setJustArrived] = useState(false);
 
   const spineColor = getSpineColor(file.filename);
   const jitter = getVerticalJitter(file.filename);
@@ -184,6 +192,25 @@ function Book3D({
     observer.observe(el);
     return () => observer.disconnect();
   }, [loadThumb]);
+
+  // Newly uploaded volumes load their thumbnail immediately, even off-screen, so the
+  // "uploading…" animation can resolve into an actual preview instead of stalling.
+  useEffect(() => {
+    if (isNewlyUploaded) void loadThumb();
+  }, [isNewlyUploaded, loadThumb]);
+
+  useEffect(() => {
+    if (thumb.phase !== "ready" && thumb.phase !== "error") return;
+    if (!settledNotifiedRef.current) {
+      settledNotifiedRef.current = true;
+      onThumbSettled?.(file.id);
+    }
+    if (isNewlyUploaded && thumb.phase === "ready") {
+      setJustArrived(true);
+      const t = setTimeout(() => setJustArrived(false), 900);
+      return () => clearTimeout(t);
+    }
+  }, [thumb.phase, isNewlyUploaded, onThumbSettled, file.id]);
 
   useEffect(() => () => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -271,6 +298,36 @@ function Book3D({
             borderRadius: "50%",
             background: "radial-gradient(circle, rgba(201,124,42,0.38) 0%, rgba(201,124,42,0) 70%)",
             animation: "libraryOpenGlow 380ms ease-out forwards",
+            pointerEvents: "none",
+            zIndex: -1,
+          }}
+        />
+      )}
+
+      {/* Breathing gold ring while a just-uploaded volume's thumbnail is still loading */}
+      {isNewlyUploaded && (thumb.phase === "idle" || thumb.phase === "loading") && (
+        <div
+          aria-hidden
+          style={{
+            position: "absolute", inset: "-14px",
+            borderRadius: 14,
+            boxShadow: `0 0 0 2px ${C.gold}`,
+            opacity: 0.65,
+            animation: "newVolumePulse 1.3s ease-in-out infinite",
+            pointerEvents: "none",
+            zIndex: -1,
+          }}
+        />
+      )}
+      {/* Satisfying "arrived" burst the moment the thumbnail resolves */}
+      {justArrived && (
+        <div
+          aria-hidden
+          style={{
+            position: "absolute", inset: "-30px",
+            borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(201,124,42,0.40) 0%, rgba(201,124,42,0) 70%)",
+            animation: "libraryOpenGlow 700ms ease-out forwards",
             pointerEvents: "none",
             zIndex: -1,
           }}
@@ -494,6 +551,8 @@ function ShelfRow({
   onBookDragOver,
   onBookDragLeave,
   onBookDrop,
+  newlyUploadedIds,
+  onThumbSettled,
 }: {
   files: FolderFile[];
   isAdmin: boolean;
@@ -508,6 +567,8 @@ function ShelfRow({
   onBookDragOver: (fileId: string, e: DragEvent<HTMLDivElement>) => void;
   onBookDragLeave: (fileId: string, e: DragEvent<HTMLDivElement>) => void;
   onBookDrop: (fileId: string, e: DragEvent<HTMLDivElement>) => void;
+  newlyUploadedIds?: Set<string>;
+  onThumbSettled?: (fileId: string) => void;
 }) {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
@@ -539,6 +600,8 @@ function ShelfRow({
               onReorderDragOver={(e) => onBookDragOver(file.id, e)}
               onReorderDragLeave={(e) => onBookDragLeave(file.id, e)}
               onReorderDrop={(e) => onBookDrop(file.id, e)}
+              isNewlyUploaded={!!newlyUploadedIds?.has(file.id)}
+              onThumbSettled={onThumbSettled}
               adjacentShift={
                 hoveredIdx !== null
                   ? idx === hoveredIdx - 1 ? -6
@@ -589,9 +652,20 @@ function EmptyShelf() {
 
 // ─── SmallThumb ────────────────────────────────────────────────────────────────
 
-function SmallThumb({ file, folderLocked = true }: { file: FolderFile; folderLocked?: boolean }) {
+function SmallThumb({
+  file,
+  folderLocked = true,
+  isNewlyUploaded = false,
+  onThumbSettled,
+}: {
+  file: FolderFile;
+  folderLocked?: boolean;
+  isNewlyUploaded?: boolean;
+  onThumbSettled?: (fileId: string) => void;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const [thumb, setThumb] = useState<ThumbState>({ phase: "idle" });
+  const settledNotifiedRef = useRef(false);
 
   const loadThumb = useCallback(async () => {
     if (thumb.phase !== "idle") return;
@@ -616,6 +690,18 @@ function SmallThumb({ file, folderLocked = true }: { file: FolderFile; folderLoc
     return () => observer.disconnect();
   }, [loadThumb]);
 
+  useEffect(() => {
+    if (isNewlyUploaded) void loadThumb();
+  }, [isNewlyUploaded, loadThumb]);
+
+  useEffect(() => {
+    if (thumb.phase !== "ready" && thumb.phase !== "error") return;
+    if (!settledNotifiedRef.current) {
+      settledNotifiedRef.current = true;
+      onThumbSettled?.(file.id);
+    }
+  }, [thumb.phase, onThumbSettled, file.id]);
+
   const spineColor = getSpineColor(file.filename);
   const openVolume = !folderLocked;
 
@@ -631,7 +717,13 @@ function SmallThumb({ file, folderLocked = true }: { file: FolderFile; folderLoc
           ? "linear-gradient(145deg,#f2ebe0,#e4d9c8)"
           : spineColor,
         position: "relative",
-        border: openVolume ? `1px solid rgba(26,39,68,0.12)` : "none",
+        border: isNewlyUploaded && thumb.phase !== "ready"
+          ? `1px solid ${C.gold}`
+          : openVolume ? `1px solid rgba(26,39,68,0.12)` : "none",
+        boxShadow: isNewlyUploaded && (thumb.phase === "idle" || thumb.phase === "loading")
+          ? `0 0 0 2px rgba(201,124,42,0.35)`
+          : "none",
+        transition: "box-shadow 200ms ease, border-color 200ms ease",
       }}
     >
       {thumb.phase === "ready" && thumb.dataUrl ? (
@@ -676,6 +768,8 @@ export function ListView({
   allowRename = false,
   onRename,
   renamePendingId = null,
+  newlyUploadedIds,
+  onThumbSettled,
 }: {
   files: FolderFile[];
   searchQuery: string;
@@ -688,6 +782,8 @@ export function ListView({
   allowRename?: boolean;
   onRename?: (fileId: string, filename: string) => void;
   renamePendingId?: string | null;
+  newlyUploadedIds?: Set<string>;
+  onThumbSettled?: (fileId: string) => void;
 }) {
   const router = useRouter();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -801,7 +897,12 @@ export function ListView({
                 ☰
               </div>
             )}
-            <SmallThumb file={file} folderLocked={folderLocked && !isAdmin} />
+            <SmallThumb
+              file={file}
+              folderLocked={folderLocked && !isAdmin}
+              isNewlyUploaded={!!newlyUploadedIds?.has(file.id)}
+              onThumbSettled={onThumbSettled}
+            />
             <div style={{ flex: 1, minWidth: 0 }}>
               {renamingId === file.id ? (
                 <input
@@ -932,6 +1033,8 @@ export function BookshelfView({
   allowReorder = false,
   reorderSaving = false,
   onReorder,
+  newlyUploadedIds,
+  onThumbSettled,
 }: {
   files: FolderFile[];
   isAdmin: boolean;
@@ -941,6 +1044,9 @@ export function BookshelfView({
   allowReorder?: boolean;
   reorderSaving?: boolean;
   onReorder?: (next: FolderFile[]) => void;
+  /** File ids uploaded this session whose thumbnail hasn't resolved yet — see Book3D. */
+  newlyUploadedIds?: Set<string>;
+  onThumbSettled?: (fileId: string) => void;
 }) {
   const [draggingFileId, setDraggingFileId] = useState<string | null>(null);
   const [dragOverFileId, setDragOverFileId] = useState<string | null>(null);
@@ -1026,6 +1132,8 @@ export function BookshelfView({
               allowReorder={reorderActive}
               draggingFileId={draggingFileId}
               dragOverFileId={dragOverFileId}
+              newlyUploadedIds={newlyUploadedIds}
+              onThumbSettled={onThumbSettled}
               onBookDragStart={onBookDragStart}
               onBookDragEnd={onBookDragEnd}
               onBookDragOver={onBookDragOver}

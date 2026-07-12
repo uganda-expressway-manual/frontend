@@ -7,6 +7,7 @@ import {
   Fragment,
   type RefObject,
   ReactNode,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -49,7 +50,7 @@ interface FileVersionItem {
 const PAGE_CHUNK_SIZE = 5;
 type FileSortField = "filename" | "createdAt" | "number";
 type SortDirection  = "desc" | "asc";
-type UploadUiPhase  = "idle" | "uploading" | "done" | "error";
+type UploadUiPhase  = "idle" | "uploading" | "processing" | "done" | "error";
 type ViewMode       = "bookshelf" | "list";
 
 // ─── Main page ────────────────────────────────────────────────────────────────
@@ -79,6 +80,14 @@ export default function FolderPage() {
   const [uploadUi, setUploadUi] = useState<{
     phase: UploadUiPhase; percent: number; indeterminate: boolean; fileCount: number;
   }>({ phase: "idle", percent: 0, indeterminate: false, fileCount: 0 });
+  /**
+   * Upload animation stays in "processing" until every newly-uploaded volume's thumbnail has
+   * actually rendered on the shelf (see Book3D/SmallThumb `onThumbSettled`), not just when the
+   * HTTP request finishes — so the UI never claims "done" before there's something to see.
+   */
+  const [pendingThumbIds, setPendingThumbIds] = useState<Set<string>>(new Set());
+  const preUploadFileIdsRef = useRef<Set<string>>(new Set());
+  const awaitingThumbsRef = useRef(false);
 
   const [debouncedFolderSearch] = useDebounce(folderSearch, 300);
 
@@ -114,16 +123,36 @@ export default function FolderPage() {
       });
     },
     onMutate: (files: File[]) => {
+      preUploadFileIdsRef.current = new Set(orderedFiles.map((f) => f.id));
       setUploadUi({ phase: "uploading", percent: 0, indeterminate: true, fileCount: files.length });
     },
-    onSuccess: () => {
-      setUploadUi((prev) => ({ ...prev, phase: "done", percent: 100, indeterminate: false }));
-      void folderQuery.refetch();
+    onSuccess: async () => {
+      // Upload request is done, but keep animating: wait for the new volume(s)' thumbnails
+      // to actually render before declaring the upload "done".
+      setUploadUi((prev) => ({ ...prev, phase: "processing", percent: 100, indeterminate: true }));
+      const result = await folderQuery.refetch();
+      const freshIds = result.data?.files.map((f) => f.id) ?? [];
+      const newIds = freshIds.filter((id) => !preUploadFileIdsRef.current.has(id));
+      if (newIds.length === 0) {
+        setUploadUi((prev) => (prev.phase === "processing" ? { ...prev, phase: "done" } : prev));
+        return;
+      }
+      awaitingThumbsRef.current = true;
+      setPendingThumbIds(new Set(newIds));
     },
     onError: () => {
       setUploadUi((prev) => ({ ...prev, phase: "error", percent: 0, indeterminate: false }));
     },
   });
+
+  const onThumbSettled = useCallback((fileId: string) => {
+    setPendingThumbIds((prev) => {
+      if (!prev.has(fileId)) return prev;
+      const next = new Set(prev);
+      next.delete(fileId);
+      return next;
+    });
+  }, []);
 
   const deleteFileMutation = useMutation({
     mutationFn: async (fileId: string) => api.delete(`/files/${fileId}`),
@@ -194,6 +223,27 @@ export default function FolderPage() {
     }, 2800);
     return () => window.clearTimeout(t);
   }, [uploadUi.phase]);
+
+  useEffect(() => {
+    if (!awaitingThumbsRef.current) return;
+    if (pendingThumbIds.size === 0) {
+      awaitingThumbsRef.current = false;
+      setUploadUi((prev) => (prev.phase === "processing" ? { ...prev, phase: "done", indeterminate: false } : prev));
+    }
+  }, [pendingThumbIds]);
+
+  useEffect(() => {
+    if (!awaitingThumbsRef.current) return;
+    // Safety net: never leave the animation stuck if a thumbnail never settles
+    // (e.g. the volume scrolled out and its row unmounted before loading).
+    const t = window.setTimeout(() => {
+      if (!awaitingThumbsRef.current) return;
+      awaitingThumbsRef.current = false;
+      setPendingThumbIds(new Set());
+      setUploadUi((prev) => (prev.phase === "processing" ? { ...prev, phase: "done", indeterminate: false } : prev));
+    }, 15000);
+    return () => window.clearTimeout(t);
+  }, [pendingThumbIds]);
 
   useEffect(() => {
     const p = new URLSearchParams(searchParams.toString());
@@ -297,7 +347,11 @@ export default function FolderPage() {
           padding: "0 0 64px",
           position: "relative",
           opacity: contentSettled ? 1 : 0,
-          transform: contentSettled ? "translateY(0) scale(1)" : "translateY(14px) scale(0.99)",
+          /* "none" (not an identity transform like translateY(0)) once settled — any non-none
+             transform on this ancestor would create a CSS containing block, breaking the fixed
+             positioning of the DocumentChatWidget it wraps (bubble/panel would clip to this
+             section's box instead of floating relative to the viewport, like on the dashboard). */
+          transform: contentSettled ? "none" : "translateY(14px) scale(0.99)",
           transition: "opacity 380ms ease-out, transform 380ms ease-out",
         }}
         onDragOver={(e)  => { if (!admin || uploadBlockedForUser) return; e.preventDefault(); }}
@@ -594,6 +648,8 @@ export default function FolderPage() {
                 setOrderedFiles(next);
                 reorderFilesMutation.mutate(next.map((f) => f.id));
               }}
+              newlyUploadedIds={pendingThumbIds}
+              onThumbSettled={onThumbSettled}
             />
             {(renameFileMutation.isError || reorderFilesMutation.isError) && (
               <p style={{ fontFamily: fontSerif, fontSize: 12, color: "#c0392b", marginTop: 12 }}>
@@ -618,6 +674,8 @@ export default function FolderPage() {
               allowRename={admin && !uploadBlockedForUser}
               renamePendingId={renameFileMutation.isPending ? renameFileMutation.variables?.fileId ?? null : null}
               onRename={(fileId, filename) => renameFileMutation.mutate({ fileId, filename })}
+              newlyUploadedIds={pendingThumbIds}
+              onThumbSettled={onThumbSettled}
             />
             {(renameFileMutation.isError || reorderFilesMutation.isError) && (
               <p style={{ fontFamily: fontSerif, fontSize: 12, color: "#c0392b", marginTop: 12 }}>
@@ -728,7 +786,7 @@ function SlimDropZone({
   onUploadFiles: (files: File[]) => void;
 }) {
   const [active, setActive] = useState(false);
-  const isUploading = uploadPhase === "uploading";
+  const isUploading = uploadPhase === "uploading" || uploadPhase === "processing";
 
   if (locked) {
     return (
@@ -773,6 +831,28 @@ function SlimDropZone({
     );
   }
 
+  if (uploadPhase === "processing") {
+    return (
+      <div style={{
+        height: 52, border: `1px dashed ${C.border}`, borderRadius: 4,
+        display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+        background: "rgba(201,124,42,0.03)",
+      }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }} aria-hidden>
+          {[0, 1, 2].map((i) => (
+            <span key={i} style={{
+              width: 5, height: 5, borderRadius: "50%", background: C.gold,
+              animation: `uploadDotPulse 1s ease-in-out ${i * 0.15}s infinite`,
+            }} />
+          ))}
+        </span>
+        <span style={{ fontFamily: fontSerif, fontSize: 12, fontStyle: "italic", color: C.muted }}>
+          Preparing {uploadFileCount > 0 ? uploadFileCountLabel(uploadFileCount) : "your file"} for the shelf…
+        </span>
+      </div>
+    );
+  }
+
   if (uploadPhase === "done") {
     return (
       <div style={{
@@ -782,12 +862,28 @@ function SlimDropZone({
         display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
         fontFamily: fontSerif, fontSize: 13, color: "#15803d",
       }}>
-        <span style={{
-          display: "inline-flex", width: 18, height: 18, borderRadius: "50%",
-          background: "#16a34a", color: "#fff",
-          alignItems: "center", justifyContent: "center", fontSize: 11,
-        }}>✓</span>
-        Upload complete
+        <span
+          aria-hidden
+          style={{
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            width: 20, height: 20, borderRadius: "50%",
+            background: "#16a34a",
+            animation: "uploadCheckPop 420ms cubic-bezier(0.34,1.56,0.64,1) both",
+          }}
+        >
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="#fff" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+            <path
+              d="M20 6L9 17l-5-5"
+              pathLength={1}
+              style={{
+                strokeDasharray: 1,
+                strokeDashoffset: 1,
+                animation: "uploadCheckDraw 380ms 120ms cubic-bezier(0.22,1,0.36,1) forwards",
+              }}
+            />
+          </svg>
+        </span>
+        Added to your shelf
         {uploadFileCount > 0 && ` · ${uploadFileCountLabel(uploadFileCount)}`}
       </div>
     );
