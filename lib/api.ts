@@ -13,6 +13,7 @@ import {
   ChatHistoryMessage,
   ChatRoomDetail,
   ChatRoomSummary,
+  FolderFileRagStatus,
   HighlightItem,
   NoteItem,
   PdfPresignedUrlResponse,
@@ -41,8 +42,10 @@ export const USERS_SIGNUP_ROUTES = {
 
 /** Express chatbot routes — keep aligned with backend. */
 export const CHATBOT_ROUTES = {
-  chat: "/chatbot",
   availableModels: "/chatbot/available_models",
+  model: "/chatbot/model",
+  /** POST `{ text }` — send a message in the given chat room (general, non-folder-scoped chat). */
+  message: (chatId: string) => `/chatbot/${encodeURIComponent(chatId)}/message`,
 } as const;
 
 /** Chat room CRUD — keep aligned with backend. */
@@ -631,6 +634,17 @@ export async function patchFileOrder(folderId: string, fileIds: string[]): Promi
   await api.patch(`/files/order/${encodeURIComponent(folderId)}`, { fileIds });
 }
 
+/** GET `/folders/:folderId/rag-status` — which files in the folder are indexed in its FileSearchStore (admin only). */
+export async function getFolderRagStatus(folderId: string): Promise<FolderFileRagStatus[]> {
+  const { data } = await api.get<FolderFileRagStatus[]>(`/folders/${encodeURIComponent(folderId)}/rag-status`);
+  return data;
+}
+
+/** POST `/files/:id/rag-upload` — index an already-saved file into its folder's FileSearchStore (admin only). */
+export async function uploadFileToRagStore(fileId: string): Promise<void> {
+  await api.post(`/files/${encodeURIComponent(fileId)}/rag-upload`);
+}
+
 /**
  * Page notes — `GET|POST|PATCH|DELETE` under `/notes/:fileId` (Express, no `/api` prefix).
  *
@@ -750,14 +764,19 @@ export async function getChatbotAvailableModels(): Promise<ChatModelOption[]> {
   return parseChatbotAvailableModelsPayload(data);
 }
 
+/** PATCH `/chatbot/model` — switch the active model (global, applies to every chat). */
+export async function updateChatbotModel(model: string): Promise<void> {
+  await api.patch(CHATBOT_ROUTES.model, { model });
+}
+
 export type ChatbotMessagePayload = {
   chatId: string;
   text: string;
 };
 
-/** POST `/chatbot` — send a message in a chat room. */
+/** POST `/chatbot/:chatId/message` — send a message in a chat room (general, non-folder-scoped chat). */
 export async function postChatbotMessage(payload: ChatbotMessagePayload): Promise<unknown> {
-  const { data } = await api.post<unknown>(CHATBOT_ROUTES.chat, payload);
+  const { data } = await api.post<unknown>(CHATBOT_ROUTES.message(payload.chatId), { text: payload.text });
   return data;
 }
 

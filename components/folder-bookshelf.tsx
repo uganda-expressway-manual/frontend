@@ -9,7 +9,7 @@
  *   3. Placeholder cover (spine color + title text) shown while loading / on error
  */
 
-import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type DragEvent, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { pdfjs } from "react-pdf";
 import { getPdfViewerPresignedUrl } from "@/lib/api";
@@ -126,6 +126,10 @@ function Book3D({
   onReorderDrop,
   isNewlyUploaded = false,
   onThumbSettled,
+  ragUploaded,
+  ragStatusLoading = false,
+  onUploadToRag,
+  ragUploadPending = false,
 }: {
   file: FolderFile;
   isAdmin: boolean;
@@ -145,6 +149,11 @@ function Book3D({
   isNewlyUploaded?: boolean;
   /** Fired once when the thumbnail finishes loading (ready or error) — lets the caller end its upload animation. */
   onThumbSettled?: (fileId: string) => void;
+  /** Undefined while rag status hasn't been fetched (e.g. non-admin viewer). */
+  ragUploaded?: boolean;
+  ragStatusLoading?: boolean;
+  onUploadToRag?: (file: FolderFile) => void;
+  ragUploadPending?: boolean;
 }) {
   const router = useRouter();
   const bookRef = useRef<HTMLDivElement>(null);
@@ -504,6 +513,41 @@ function Book3D({
             </div>
           )}
 
+          {/* Admin RAG index status — indexed dot, or a click-to-add button when not indexed */}
+          {isAdmin && !ragStatusLoading && ragUploaded === false && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onUploadToRag?.(file); }}
+              disabled={ragUploadPending || !onUploadToRag}
+              title="Not indexed for document search — click to add"
+              style={{
+                position: "absolute", top: 6, left: 6,
+                fontFamily: fontSerif, fontSize: 9, whiteSpace: "nowrap",
+                padding: "3px 6px", borderRadius: 3,
+                border: `1px solid ${C.gold}`,
+                background: ragUploadPending ? "rgba(201,124,42,0.14)" : "rgba(250,248,243,0.92)",
+                color: C.gold, cursor: ragUploadPending ? "default" : "pointer",
+                opacity: ragUploadPending ? 0.8 : hovered ? 1 : 0.85,
+                zIndex: 10,
+              }}
+            >
+              {ragUploadPending ? "Indexing…" : "Not indexed · Add"}
+            </button>
+          )}
+          {isAdmin && !ragStatusLoading && ragUploaded === true && (
+            <span
+              aria-hidden
+              title="Indexed for document search"
+              style={{
+                position: "absolute", top: 6, left: 6,
+                width: 8, height: 8, borderRadius: "50%",
+                background: "#16a34a",
+                boxShadow: "0 0 0 2px rgba(250,248,243,0.9)",
+                zIndex: 10,
+              }}
+            />
+          )}
+
           {/* Admin delete × — allowed even when folder is locked */}
           {isAdmin && (
             <button
@@ -553,6 +597,10 @@ function ShelfRow({
   onBookDrop,
   newlyUploadedIds,
   onThumbSettled,
+  ragUploadedIds,
+  ragStatusLoading,
+  onUploadToRag,
+  ragUploadPendingId,
 }: {
   files: FolderFile[];
   isAdmin: boolean;
@@ -569,6 +617,10 @@ function ShelfRow({
   onBookDrop: (fileId: string, e: DragEvent<HTMLDivElement>) => void;
   newlyUploadedIds?: Set<string>;
   onThumbSettled?: (fileId: string) => void;
+  ragUploadedIds?: Set<string>;
+  ragStatusLoading?: boolean;
+  onUploadToRag?: (file: FolderFile) => void;
+  ragUploadPendingId?: string | null;
 }) {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
@@ -602,6 +654,10 @@ function ShelfRow({
               onReorderDrop={(e) => onBookDrop(file.id, e)}
               isNewlyUploaded={!!newlyUploadedIds?.has(file.id)}
               onThumbSettled={onThumbSettled}
+              ragUploaded={ragUploadedIds?.has(file.id)}
+              ragStatusLoading={ragStatusLoading}
+              onUploadToRag={onUploadToRag}
+              ragUploadPending={ragUploadPendingId === file.id}
               adjacentShift={
                 hoveredIdx !== null
                   ? idx === hoveredIdx - 1 ? -6
@@ -744,6 +800,66 @@ function SmallThumb({
   );
 }
 
+// ─── RagStatusControl ──────────────────────────────────────────────────────────
+// Shows whether a file is indexed in the folder's Gemini FileSearchStore (used for
+// document Q&A), with a one-click way to index it when it isn't yet.
+
+function RagStatusControl({
+  uploaded,
+  loading,
+  pending,
+  onUpload,
+}: {
+  uploaded: boolean;
+  loading?: boolean;
+  pending?: boolean;
+  onUpload?: (e: MouseEvent) => void;
+}) {
+  if (loading) {
+    return (
+      <span style={{ fontFamily: fontSerif, fontSize: 11, color: C.muted, flexShrink: 0 }}>
+        Checking…
+      </span>
+    );
+  }
+
+  if (uploaded) {
+    return (
+      <span
+        title="Indexed for document search"
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 4,
+          fontFamily: fontSerif, fontSize: 11, color: "#15803d",
+          flexShrink: 0, whiteSpace: "nowrap",
+        }}
+      >
+        <span aria-hidden style={{ width: 6, height: 6, borderRadius: "50%", background: "#16a34a" }} />
+        Indexed
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onUpload}
+      disabled={pending || !onUpload}
+      title="Add this volume to the folder's search index so the chat assistant can find it"
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 4,
+        fontFamily: fontSerif, fontSize: 11, whiteSpace: "nowrap",
+        padding: "4px 8px", borderRadius: 3,
+        border: `1px solid ${C.gold}`, background: pending ? "rgba(201,124,42,0.08)" : "transparent",
+        color: C.gold, cursor: pending || !onUpload ? "default" : "pointer",
+        opacity: pending ? 0.7 : 1, flexShrink: 0,
+      }}
+    >
+      <span aria-hidden style={{ width: 6, height: 6, borderRadius: "50%", border: `1px solid ${C.gold}` }} />
+      {pending ? "Indexing…" : "Not indexed · Add"}
+    </button>
+  );
+}
+
 function reorderFileList(list: FolderFile[], fromId: string, toId: string): FolderFile[] {
   const fromIdx = list.findIndex((f) => f.id === fromId);
   const toIdx = list.findIndex((f) => f.id === toId);
@@ -770,6 +886,10 @@ export function ListView({
   renamePendingId = null,
   newlyUploadedIds,
   onThumbSettled,
+  ragUploadedIds,
+  ragStatusLoading = false,
+  onUploadToRag,
+  ragUploadPendingId = null,
 }: {
   files: FolderFile[];
   searchQuery: string;
@@ -784,6 +904,11 @@ export function ListView({
   renamePendingId?: string | null;
   newlyUploadedIds?: Set<string>;
   onThumbSettled?: (fileId: string) => void;
+  /** File ids already indexed in the folder's search store. Omitted (not just empty) while status is unknown/not fetched. */
+  ragUploadedIds?: Set<string>;
+  ragStatusLoading?: boolean;
+  onUploadToRag?: (file: FolderFile) => void;
+  ragUploadPendingId?: string | null;
 }) {
   const router = useRouter();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -940,6 +1065,14 @@ export function ListView({
                 {formatDate(file.createdAt)}
               </p>
             </div>
+            {isAdmin && ragUploadedIds && (
+              <RagStatusControl
+                uploaded={ragUploadedIds.has(file.id)}
+                loading={ragStatusLoading}
+                pending={ragUploadPendingId === file.id}
+                onUpload={onUploadToRag ? (e) => { e.stopPropagation(); onUploadToRag(file); } : undefined}
+              />
+            )}
             {isAdmin && (
               <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                 {allowRename && onRename && renamingId === file.id ? (
@@ -1035,6 +1168,10 @@ export function BookshelfView({
   onReorder,
   newlyUploadedIds,
   onThumbSettled,
+  ragUploadedIds,
+  ragStatusLoading = false,
+  onUploadToRag,
+  ragUploadPendingId = null,
 }: {
   files: FolderFile[];
   isAdmin: boolean;
@@ -1047,6 +1184,11 @@ export function BookshelfView({
   /** File ids uploaded this session whose thumbnail hasn't resolved yet — see Book3D. */
   newlyUploadedIds?: Set<string>;
   onThumbSettled?: (fileId: string) => void;
+  /** File ids already indexed in the folder's search store. Omitted (not just empty) while status is unknown/not fetched. */
+  ragUploadedIds?: Set<string>;
+  ragStatusLoading?: boolean;
+  onUploadToRag?: (file: FolderFile) => void;
+  ragUploadPendingId?: string | null;
 }) {
   const [draggingFileId, setDraggingFileId] = useState<string | null>(null);
   const [dragOverFileId, setDragOverFileId] = useState<string | null>(null);
@@ -1134,6 +1276,10 @@ export function BookshelfView({
               dragOverFileId={dragOverFileId}
               newlyUploadedIds={newlyUploadedIds}
               onThumbSettled={onThumbSettled}
+              ragUploadedIds={ragUploadedIds}
+              ragStatusLoading={ragStatusLoading}
+              onUploadToRag={onUploadToRag}
+              ragUploadPendingId={ragUploadPendingId}
               onBookDragStart={onBookDragStart}
               onBookDragEnd={onBookDragEnd}
               onBookDragOver={onBookDragOver}

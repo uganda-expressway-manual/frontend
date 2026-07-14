@@ -30,6 +30,13 @@ export interface FolderFile {
   sortOrder?: number;
 }
 
+/** GET `/folders/:folderId/rag-status` — per-file indexing state in the folder's Gemini FileSearchStore. */
+export interface FolderFileRagStatus {
+  id: string;
+  filename: string;
+  ragUploaded: boolean;
+}
+
 export interface Folder {
   id: string;
   foldername: string;

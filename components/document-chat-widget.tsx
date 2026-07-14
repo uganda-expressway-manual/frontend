@@ -16,6 +16,7 @@ import {
   postChatbotMessage,
   postFolderQuery,
   updateChat,
+  updateChatbotModel,
   type ChatModelOption,
 } from "@/lib/api";
 import type { ChatHistoryMessage, ChatRoomSummary } from "@/lib/types";
@@ -136,6 +137,11 @@ export function DocumentChatWidget({
     queryKey: ["chatbot", "available_models"],
     queryFn: getChatbotAvailableModels,
     staleTime: 5 * 60 * 1000,
+  });
+
+  /** Backend model switch is global (`PATCH /chatbot/model`) — picking a model here isn't just local UI state. */
+  const updateModelMutation = useMutation({
+    mutationFn: (model: string) => updateChatbotModel(model),
   });
 
   const chatsQuery = useQuery({
@@ -423,9 +429,18 @@ export function DocumentChatWidget({
       return;
     }
     const currentChar = assistantTyping.fullText.charAt(assistantTyping.cursor);
-    const delay = /[,.!?]/.test(currentChar) ? 85 : /\s/.test(currentChar) ? 22 : 14;
+    const isPunctuation = /[,.!?]/.test(currentChar);
+    const isSpace = /\s/.test(currentChar);
+    /**
+     * Chained setTimeouts get clamped to a ~4ms floor by the browser after a few iterations, so
+     * shortening the per-tick delay alone plateaus well short of "4x faster". Revealing a few
+     * normal characters per tick (instead of one) is what actually scales the reveal speed;
+     * punctuation/spaces still land as single steps so the pacing still reads naturally.
+     */
+    const step = isPunctuation || isSpace ? 1 : 3;
+    const delay = isPunctuation ? 12 : 4;
     const timer = window.setTimeout(() => {
-      const nextCursor = assistantTyping.cursor + 1;
+      const nextCursor = Math.min(assistantTyping.cursor + step, assistantTyping.fullText.length);
       const nextText = assistantTyping.fullText.slice(0, nextCursor);
       setChatMessages(prev => {
         const idx = prev.findIndex(m => m.id === assistantTyping.messageId);
@@ -630,7 +645,7 @@ export function DocumentChatWidget({
     chatModelOptions.find((m) => m.id === selectedModelId)?.label ?? chatModelOptions[0]?.label ?? "";
   const hasActiveChatroom = Boolean(activeChatId);
   const modelPickerDisabled =
-    !hasActiveChatroom || chatMutation.isPending || Boolean(assistantTyping);
+    !hasActiveChatroom || chatMutation.isPending || Boolean(assistantTyping) || updateModelMutation.isPending;
   const inputDisabled = !hasActiveChatroom || isConversationRunning;
   const showNoChatroomPrompt = !hasActiveChatroom && !isHistoryLoading;
   const showGreetingEmpty =
@@ -814,7 +829,7 @@ export function DocumentChatWidget({
                 }}
               >
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {selectedModelLabel}
+                  {updateModelMutation.isPending ? "Switching model…" : selectedModelLabel}
                 </span>
                 <ChevronDownIcon open={isModelMenuOpen} stroke={C.navy} />
               </button>
@@ -846,8 +861,15 @@ export function DocumentChatWidget({
                           role="option"
                           aria-selected={sel}
                           onClick={() => {
+                            const previousModelId = selectedModelId;
                             setSelectedModelId(option.id);
                             setIsModelMenuOpen(false);
+                            if (option.id !== previousModelId) {
+                              updateModelMutation.mutate(option.id, {
+                                // Backend rejected the switch — fall back to the model that's actually active.
+                                onError: () => setSelectedModelId(previousModelId),
+                              });
+                            }
                           }}
                           style={{
                             width: "100%",
@@ -867,6 +889,14 @@ export function DocumentChatWidget({
                     );
                   })}
                 </ul>
+              )}
+              {updateModelMutation.isError && (
+                <p role="alert" style={{
+                  margin: "4px 2px 0", fontFamily: fontBody, fontSize: 10.5,
+                  color: "#e6b0a0",
+                }}>
+                  Couldn't switch models — still using {selectedModelLabel}.
+                </p>
               )}
             </div>
           </div>
@@ -1209,7 +1239,7 @@ export function DocumentChatWidget({
                             <span className="chat-typing-cursor-line" aria-hidden />
                           ) : isTypingMessage ? (
                             <div className="chat-typing-md">
-                              {renderMessageText(message.text, "assistant", { streamCursor: true })}
+                              {renderMessageText(message.text, "assistant")}
                             </div>
                           ) : (
                             renderMessageText(message.text, "assistant")

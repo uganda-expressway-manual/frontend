@@ -20,7 +20,7 @@ import axios from "axios";
 import { DocumentChatWidget } from "@/components/document-chat-widget";
 import { BookshelfView, ListView } from "@/components/folder-bookshelf";
 import { isAdminUser } from "@/lib/auth-user";
-import { api, patchFileFilename, patchFileOrder } from "@/lib/api";
+import { api, getFolderRagStatus, patchFileFilename, patchFileOrder, uploadFileToRagStore } from "@/lib/api";
 import { useAuth } from "@/lib/hooks/use-auth";
 import { Folder, FolderFile } from "@/lib/types";
 
@@ -79,7 +79,9 @@ export default function FolderPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadUi, setUploadUi] = useState<{
     phase: UploadUiPhase; percent: number; indeterminate: boolean; fileCount: number;
-  }>({ phase: "idle", percent: 0, indeterminate: false, fileCount: 0 });
+    /** All bytes are on the wire but the server hasn't responded yet — never shown as "100%". */
+    awaitingResponse: boolean;
+  }>({ phase: "idle", percent: 0, indeterminate: false, fileCount: 0, awaitingResponse: false });
   /**
    * Upload animation stays in "processing" until every newly-uploaded volume's thumbnail has
    * actually rendered on the shelf (see Book3D/SmallThumb `onThumbSettled`), not just when the
@@ -107,6 +109,27 @@ export default function FolderPage() {
     enabled: Boolean(folderId),
   });
 
+  /** Which files are already indexed in the folder's Gemini FileSearchStore — admin-only concern. */
+  const ragStatusQuery = useQuery({
+    queryKey: ["folder-rag-status", folderId],
+    queryFn: async () => getFolderRagStatus(folderId),
+    enabled: Boolean(folderId) && admin,
+  });
+  const ragUploadedIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const status of ragStatusQuery.data ?? []) {
+      if (status.ragUploaded) ids.add(status.id);
+    }
+    return ids;
+  }, [ragStatusQuery.data]);
+
+  const uploadToRagMutation = useMutation({
+    mutationFn: async (fileId: string) => uploadFileToRagStore(fileId),
+    onSuccess: () => {
+      void ragStatusQuery.refetch();
+    },
+  });
+
   const uploadMutation = useMutation({
     mutationFn: async (files: File[]) => {
       const formData = new FormData();
@@ -115,21 +138,27 @@ export default function FolderPage() {
         headers: { "Content-Type": "multipart/form-data" },
         onUploadProgress: (event) => {
           const total = event.total ?? 0;
-          if (total > 0) {
-            const percent = Math.min(100, Math.round((event.loaded / total) * 100));
-            setUploadUi((prev) => ({ ...prev, phase: "uploading", percent, indeterminate: false }));
+          if (total <= 0) return;
+          const rawPercent = Math.round((event.loaded / total) * 100);
+          if (rawPercent >= 100) {
+            // Every byte is sent, but the server is still parsing/saving the file — hold just
+            // shy of 100% and switch to an indeterminate animation instead of looking "done".
+            setUploadUi((prev) => ({ ...prev, phase: "uploading", percent: 96, indeterminate: true, awaitingResponse: true }));
+          } else {
+            setUploadUi((prev) => ({ ...prev, phase: "uploading", percent: Math.min(96, rawPercent), indeterminate: false, awaitingResponse: false }));
           }
         },
       });
     },
     onMutate: (files: File[]) => {
       preUploadFileIdsRef.current = new Set(orderedFiles.map((f) => f.id));
-      setUploadUi({ phase: "uploading", percent: 0, indeterminate: true, fileCount: files.length });
+      setUploadUi({ phase: "uploading", percent: 0, indeterminate: true, fileCount: files.length, awaitingResponse: false });
     },
     onSuccess: async () => {
       // Upload request is done, but keep animating: wait for the new volume(s)' thumbnails
       // to actually render before declaring the upload "done".
       setUploadUi((prev) => ({ ...prev, phase: "processing", percent: 100, indeterminate: true }));
+      void ragStatusQuery.refetch();
       const result = await folderQuery.refetch();
       const freshIds = result.data?.files.map((f) => f.id) ?? [];
       const newIds = freshIds.filter((id) => !preUploadFileIdsRef.current.has(id));
@@ -219,7 +248,7 @@ export default function FolderPage() {
   useEffect(() => {
     if (uploadUi.phase !== "done") return;
     const t = window.setTimeout(() => {
-      setUploadUi({ phase: "idle", percent: 0, indeterminate: false, fileCount: 0 });
+      setUploadUi({ phase: "idle", percent: 0, indeterminate: false, fileCount: 0, awaitingResponse: false });
     }, 2800);
     return () => window.clearTimeout(t);
   }, [uploadUi.phase]);
@@ -540,7 +569,7 @@ export default function FolderPage() {
                 fileInputRef={fileInputRef}
                 uploadPhase={uploadUi.phase}
                 uploadPercent={uploadUi.percent}
-                uploadIndeterminate={uploadUi.indeterminate}
+                uploadAwaitingResponse={uploadUi.awaitingResponse}
                 uploadFileCount={uploadUi.fileCount}
                 onFilePick={onFilePick}
                 onUploadFiles={(files) => uploadMutation.mutate(files)}
@@ -650,6 +679,10 @@ export default function FolderPage() {
               }}
               newlyUploadedIds={pendingThumbIds}
               onThumbSettled={onThumbSettled}
+              ragUploadedIds={admin ? ragUploadedIds : undefined}
+              ragStatusLoading={admin && ragStatusQuery.isLoading}
+              onUploadToRag={(file) => uploadToRagMutation.mutate(file.id)}
+              ragUploadPendingId={uploadToRagMutation.isPending ? uploadToRagMutation.variables ?? null : null}
             />
             {(renameFileMutation.isError || reorderFilesMutation.isError) && (
               <p style={{ fontFamily: fontSerif, fontSize: 12, color: "#c0392b", marginTop: 12 }}>
@@ -676,6 +709,10 @@ export default function FolderPage() {
               onRename={(fileId, filename) => renameFileMutation.mutate({ fileId, filename })}
               newlyUploadedIds={pendingThumbIds}
               onThumbSettled={onThumbSettled}
+              ragUploadedIds={admin ? ragUploadedIds : undefined}
+              ragStatusLoading={admin && ragStatusQuery.isLoading}
+              onUploadToRag={(file) => uploadToRagMutation.mutate(file.id)}
+              ragUploadPendingId={uploadToRagMutation.isPending ? uploadToRagMutation.variables ?? null : null}
             />
             {(renameFileMutation.isError || reorderFilesMutation.isError) && (
               <p style={{ fontFamily: fontSerif, fontSize: 12, color: "#c0392b", marginTop: 12 }}>
@@ -766,12 +803,119 @@ export default function FolderPage() {
 
 // ─── SlimDropZone ─────────────────────────────────────────────────────────────
 
+const UPLOAD_RING_SIZE = 34;
+const UPLOAD_RING_STROKE = 3;
+const UPLOAD_RING_RADIUS = (UPLOAD_RING_SIZE - UPLOAD_RING_STROKE) / 2;
+const UPLOAD_RING_CIRCUMFERENCE = 2 * Math.PI * UPLOAD_RING_RADIUS;
+
+/**
+ * One persistent circular badge that morphs across every phase (idle icon → progress ring →
+ * spinner → checkmark) instead of swapping in unrelated elements per phase — a single evolving
+ * focal point reads as continuous, alive motion rather than a sequence of disjointed pop-ins.
+ */
+function UploadBadge({
+  phase, percent, awaitingResponse,
+}: { phase: UploadUiPhase; percent: number; awaitingResponse: boolean }) {
+  if (phase === "done") {
+    return (
+      <span aria-hidden style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+        width: UPLOAD_RING_SIZE, height: UPLOAD_RING_SIZE, borderRadius: "50%",
+        background: "#2d6a3a",
+        animation: "uploadCheckPop 420ms cubic-bezier(0.34,1.56,0.64,1) both",
+      }}>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+          <path
+            d="M20 6L9 17l-5-5"
+            pathLength={1}
+            style={{ strokeDasharray: 1, strokeDashoffset: 1, animation: "uploadCheckDraw 380ms 120ms cubic-bezier(0.22,1,0.36,1) forwards" }}
+          />
+        </svg>
+      </span>
+    );
+  }
+
+  if (phase === "error") {
+    return (
+      <span aria-hidden style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+        width: UPLOAD_RING_SIZE, height: UPLOAD_RING_SIZE, borderRadius: "50%",
+        background: "#a53c2e", color: "#fff",
+        fontFamily: fontSerif, fontSize: 15, fontWeight: 700, lineHeight: 1,
+        animation: "uploadCheckPop 420ms cubic-bezier(0.34,1.56,0.64,1) both",
+      }}>
+        !
+      </span>
+    );
+  }
+
+  if (phase === "idle") {
+    return (
+      <span aria-hidden style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+        width: UPLOAD_RING_SIZE, height: UPLOAD_RING_SIZE, borderRadius: "50%",
+        border: `1.5px solid ${C.border}`, color: C.muted,
+        transition: "border-color 250ms ease, color 250ms ease",
+      }}>
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 16V4M12 4l-4 4M12 4l4 4" />
+          <path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+        </svg>
+      </span>
+    );
+  }
+
+  // uploading / processing — a determinate ring fills with real byte progress, then hands off
+  // to a spinning arc once bytes are sent but the server hasn't answered yet.
+  const determinate = phase === "uploading" && !awaitingResponse;
+  return (
+    <span style={{ width: UPLOAD_RING_SIZE, height: UPLOAD_RING_SIZE, flexShrink: 0, display: "inline-flex" }} aria-hidden>
+      <svg
+        width={UPLOAD_RING_SIZE} height={UPLOAD_RING_SIZE} viewBox={`0 0 ${UPLOAD_RING_SIZE} ${UPLOAD_RING_SIZE}`}
+        style={{ transform: "rotate(-90deg)", animation: determinate ? undefined : "uploadRingSpin 900ms linear infinite" }}
+      >
+        <circle
+          cx={UPLOAD_RING_SIZE / 2} cy={UPLOAD_RING_SIZE / 2} r={UPLOAD_RING_RADIUS}
+          fill="none" stroke="#ece1cd" strokeWidth={UPLOAD_RING_STROKE}
+        />
+        <circle
+          cx={UPLOAD_RING_SIZE / 2} cy={UPLOAD_RING_SIZE / 2} r={UPLOAD_RING_RADIUS}
+          fill="none" stroke={C.gold} strokeWidth={UPLOAD_RING_STROKE} strokeLinecap="round"
+          strokeDasharray={determinate ? UPLOAD_RING_CIRCUMFERENCE : `${UPLOAD_RING_CIRCUMFERENCE * 0.26} ${UPLOAD_RING_CIRCUMFERENCE * 0.74}`}
+          strokeDashoffset={determinate ? UPLOAD_RING_CIRCUMFERENCE * (1 - percent / 100) : 0}
+          style={{ transition: determinate ? "stroke-dashoffset 250ms ease" : undefined }}
+        />
+      </svg>
+    </span>
+  );
+}
+
+/**
+ * Cycles through a fixed list of phrases while `active`, instead of one static line sitting there
+ * for however long a wait takes — visible variety reads as ongoing progress, not a stuck UI.
+ */
+function useRotatingMessages(active: boolean, messages: readonly string[]): string {
+  const [index, setIndex] = useState(0);
+  useEffect(() => {
+    if (!active) {
+      setIndex(0);
+      return;
+    }
+    if (messages.length <= 1) return;
+    const id = window.setInterval(() => {
+      setIndex((i) => (i + 1) % messages.length);
+    }, 2600);
+    return () => window.clearInterval(id);
+  }, [active, messages]);
+  return messages[index] ?? messages[0] ?? "";
+}
+
 function SlimDropZone({
   locked,
   fileInputRef,
   uploadPhase,
   uploadPercent,
-  uploadIndeterminate,
+  uploadAwaitingResponse,
   uploadFileCount,
   onFilePick,
   onUploadFiles,
@@ -780,13 +924,28 @@ function SlimDropZone({
   fileInputRef: RefObject<HTMLInputElement | null>;
   uploadPhase: UploadUiPhase;
   uploadPercent: number;
-  uploadIndeterminate: boolean;
+  uploadAwaitingResponse: boolean;
   uploadFileCount: number;
   onFilePick: (event: ChangeEvent<HTMLInputElement>) => void;
   onUploadFiles: (files: File[]) => void;
 }) {
   const [active, setActive] = useState(false);
-  const isUploading = uploadPhase === "uploading" || uploadPhase === "processing";
+  const isIdle = uploadPhase === "idle";
+
+  const awaitingMessages = useMemo(() => [
+    "Almost there — saving to your shelf…",
+    "Just a moment, tidying the pages…",
+    "Finding the perfect spot on the shelf…",
+    "Wrapping up the last few details…",
+  ], []);
+  const processingMessages = useMemo(() => [
+    `Preparing ${uploadFileCount > 0 ? uploadFileCountLabel(uploadFileCount) : "your file"} for the shelf…`,
+    "Rendering the cover…",
+    "Almost ready to read…",
+    "Just a few more seconds…",
+  ], [uploadFileCount]);
+  const awaitingMessage = useRotatingMessages(uploadPhase === "uploading" && uploadAwaitingResponse, awaitingMessages);
+  const processingMessage = useRotatingMessages(uploadPhase === "processing", processingMessages);
 
   if (locked) {
     return (
@@ -802,156 +961,84 @@ function SlimDropZone({
     );
   }
 
-  // Progress / result states
-  if (uploadPhase === "uploading") {
-    return (
-      <div style={{
-        height: 52, border: `1px dashed ${C.border}`, borderRadius: 4,
-        display: "flex", alignItems: "center", gap: 12, padding: "0 16px",
-      }}>
-        <div style={{ flex: 1, height: 4, background: "#e8e0d0", borderRadius: 2, overflow: "hidden" }}>
-          {uploadIndeterminate ? (
-            <div style={{
-              height: "100%", width: "38%", background: C.gold, borderRadius: 2,
-              animation: "slimBarSlide 1.15s ease-in-out infinite",
-            }} />
-          ) : (
-            <div style={{
-              height: "100%", background: C.gold, borderRadius: 2,
-              width: `${Math.max(2, uploadPercent)}%`,
-              transition: "width 200ms ease",
-            }} />
-          )}
-        </div>
-        <span style={{ fontFamily: fontSerif, fontSize: 12, color: C.muted, whiteSpace: "nowrap" }}>
-          {uploadFileCount > 0 ? `Uploading ${uploadFileCountLabel(uploadFileCount)}` : "Uploading…"}
-          {!uploadIndeterminate && uploadPercent > 0 ? ` · ${uploadPercent}%` : ""}
-        </span>
-      </div>
-    );
-  }
+  const label = (() => {
+    switch (uploadPhase) {
+      case "uploading":
+        return uploadAwaitingResponse
+          ? awaitingMessage
+          : `${uploadFileCount > 0 ? `Uploading ${uploadFileCountLabel(uploadFileCount)}` : "Uploading…"}${uploadPercent > 0 ? ` · ${uploadPercent}%` : ""}`;
+      case "processing":
+        return processingMessage;
+      case "done":
+        return `Added to your shelf${uploadFileCount > 0 ? ` · ${uploadFileCountLabel(uploadFileCount)}` : ""}`;
+      case "error":
+        return "Upload failed — please try again.";
+      default:
+        return active ? "Release to add this volume" : "Drop a PDF here to add a new volume";
+    }
+  })();
 
-  if (uploadPhase === "processing") {
-    return (
-      <div style={{
-        height: 52, border: `1px dashed ${C.border}`, borderRadius: 4,
-        display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-        background: "rgba(201,124,42,0.03)",
-      }}>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }} aria-hidden>
-          {[0, 1, 2].map((i) => (
-            <span key={i} style={{
-              width: 5, height: 5, borderRadius: "50%", background: C.gold,
-              animation: `uploadDotPulse 1s ease-in-out ${i * 0.15}s infinite`,
-            }} />
-          ))}
-        </span>
-        <span style={{ fontFamily: fontSerif, fontSize: 12, fontStyle: "italic", color: C.muted }}>
-          Preparing {uploadFileCount > 0 ? uploadFileCountLabel(uploadFileCount) : "your file"} for the shelf…
-        </span>
-      </div>
-    );
-  }
+  const tone =
+    uploadPhase === "done" ? { border: "rgba(45,106,58,0.35)", bg: "rgba(45,106,58,0.045)", text: "#2d6a3a" }
+    : uploadPhase === "error" ? { border: "rgba(165,60,46,0.32)", bg: "rgba(165,60,46,0.04)", text: "#a53c2e" }
+    : uploadPhase !== "idle" ? { border: "rgba(201,124,42,0.32)", bg: "rgba(201,124,42,0.035)", text: C.muted }
+    : { border: active ? C.gold : C.border, bg: active ? "rgba(201,124,42,0.045)" : "#fff", text: C.muted };
 
-  if (uploadPhase === "done") {
-    return (
-      <div style={{
-        height: 52, border: `1px solid rgba(22,163,74,0.4)`,
-        background: "rgba(22,163,74,0.04)",
-        borderRadius: 4,
-        display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-        fontFamily: fontSerif, fontSize: 13, color: "#15803d",
-      }}>
-        <span
-          aria-hidden
-          style={{
-            display: "inline-flex", alignItems: "center", justifyContent: "center",
-            width: 20, height: 20, borderRadius: "50%",
-            background: "#16a34a",
-            animation: "uploadCheckPop 420ms cubic-bezier(0.34,1.56,0.64,1) both",
-          }}
-        >
-          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="#fff" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
-            <path
-              d="M20 6L9 17l-5-5"
-              pathLength={1}
-              style={{
-                strokeDasharray: 1,
-                strokeDashoffset: 1,
-                animation: "uploadCheckDraw 380ms 120ms cubic-bezier(0.22,1,0.36,1) forwards",
-              }}
-            />
-          </svg>
-        </span>
-        Added to your shelf
-        {uploadFileCount > 0 && ` · ${uploadFileCountLabel(uploadFileCount)}`}
-      </div>
-    );
-  }
-
-  if (uploadPhase === "error") {
-    return (
-      <div style={{
-        height: 52, border: `1px solid rgba(220,38,38,0.3)`,
-        background: "rgba(220,38,38,0.03)",
-        borderRadius: 4,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontFamily: fontSerif, fontSize: 13, color: "#b91c1c",
-      }}>
-        Upload failed. Please try again.
-      </div>
-    );
-  }
-
-  // Idle state
   return (
     <div
+      role={isIdle ? "button" : undefined}
+      tabIndex={isIdle ? 0 : undefined}
       style={{
-        height: 52,
-        display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-        border: `1px dashed ${active ? C.gold : C.border}`,
-        borderRadius: 4,
-        background: active ? "rgba(201,124,42,0.04)" : "transparent",
-        transform: active ? "scale(1.01)" : "scale(1)",
-        transition: "border-color 150ms, background 150ms, transform 150ms",
-        cursor: "pointer",
+        minHeight: 60,
+        display: "flex", alignItems: "center", gap: 14,
+        padding: "0 18px",
+        borderRadius: 14,
+        border: `1.5px solid ${tone.border}`,
+        background: tone.bg,
+        transform: active ? "scale(1.008)" : "scale(1)",
+        boxShadow: uploadPhase !== "idle" ? "0 2px 12px rgba(26,39,68,0.06)" : "none",
+        transition: "border-color 320ms ease, background 320ms ease, transform 200ms ease, box-shadow 320ms ease",
+        cursor: isIdle ? "pointer" : "default",
       }}
-      onDragEnter={(e) => { if (isUploading) return; e.preventDefault(); e.stopPropagation(); setActive(true); }}
-      onDragOver={(e)  => { if (isUploading) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy"; }}
+      onDragEnter={(e) => { if (!isIdle) return; e.preventDefault(); e.stopPropagation(); setActive(true); }}
+      onDragOver={(e)  => { if (!isIdle) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy"; }}
       onDragLeave={(e) => {
         e.preventDefault();
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setActive(false);
       }}
       onDrop={(e) => {
-        if (isUploading) return;
+        if (!isIdle) return;
         e.preventDefault(); e.stopPropagation();
         setActive(false);
         const files = collectPdfFiles(e.dataTransfer.files);
         if (files.length) onUploadFiles(files);
       }}
-      onClick={() => fileInputRef.current?.click()}
+      onClick={() => { if (isIdle) fileInputRef.current?.click(); }}
+      onKeyDown={(e) => {
+        if (!isIdle) return;
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInputRef.current?.click(); }
+      }}
     >
-      <span style={{ fontSize: 15, lineHeight: 1 }}>📄</span>
-      <span style={{ fontFamily: fontSerif, fontSize: 13, fontStyle: "italic", color: C.muted }}>
-        {active
-          ? "Release to add this volume"
-          : "Drop a PDF here to add a new volume  ·  or "}
-      </span>
-      {!active && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
-          style={{
-            fontFamily: fontSerif, fontSize: 13, color: C.gold,
-            background: "none", border: "none", padding: 0, cursor: "pointer",
-            textDecoration: "none",
-            transition: "text-decoration 120ms",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
-          onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
-        >
-          Browse files
-        </button>
+      <UploadBadge phase={uploadPhase} percent={uploadPercent} awaitingResponse={uploadAwaitingResponse} />
+      <p
+        key={label}
+        style={{
+          flex: 1, minWidth: 0, margin: 0,
+          fontFamily: fontSerif, fontSize: 13, fontStyle: isIdle ? "italic" : "normal",
+          color: tone.text,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          animation: "chatWaitingFadeIn 260ms ease",
+        }}
+      >
+        {label}
+      </p>
+      {isIdle && !active && (
+        <span style={{
+          flexShrink: 0, fontFamily: fontSerif, fontSize: 12, fontWeight: 600, color: C.gold,
+          border: `1px solid ${C.gold}`, borderRadius: 999, padding: "5px 12px",
+        }}>
+          Browse
+        </span>
       )}
 
       <input
@@ -961,7 +1048,7 @@ function SlimDropZone({
         multiple
         style={{ display: "none" }}
         onChange={onFilePick}
-        disabled={isUploading}
+        disabled={!isIdle}
       />
     </div>
   );

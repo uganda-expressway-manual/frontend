@@ -109,6 +109,16 @@ a {
   animation: chat-cursor-blink 0.9s step-end infinite;
 }
 
+/**
+ * Gemini-style streaming reveal: no blinking cursor glyph — instead the trailing edge of the
+ * still-arriving text stays softly faded and solidifies as more text streams in underneath it.
+ * A fixed-height fade band (not a %-based one) keeps short single-line answers from washing out.
+ */
+.chat-typing-md {
+  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 12px), transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 12px), transparent 100%);
+}
+
 @layer components {
   /* ----------------------------------------------------------------- */
   /* IMME public site components                                       */
@@ -509,4 +519,9 @@ section.pdf-viewer-fullscreen-host:-webkit-full-screen {
 @keyframes chatWaitingFadeIn {
   from { opacity: 0; transform: translateY(2px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes uploadRingSpin {
+  from { transform: rotate(-90deg); }
+  to   { transform: rotate(270deg); }
 }
