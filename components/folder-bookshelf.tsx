@@ -242,7 +242,7 @@ function Book3D({
 
   // ── Render ──
   const bookTransform = departing
-    ? "perspective(900px) rotateY(42deg) translateY(-52px) translateZ(70px) scale(1.2)"
+    ? "translateY(-70px) scale(1.2)"
     : hovered
       ? "perspective(800px) rotateY(4deg) translateY(-12px) translateZ(16px)"
       : "perspective(800px) rotateY(8deg)";

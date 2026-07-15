@@ -124,7 +124,7 @@ export function SignupSuccessCheck({
         <path
           ref={pathRef}
           className="signup-success-check-path"
-          d="M20 6L9 17l-5-5"
+          d="M4 12L9 17L20 6"
           strokeWidth={2.2}
           strokeLinecap="round"
           strokeLinejoin="round"

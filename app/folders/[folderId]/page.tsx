@@ -53,6 +53,23 @@ type SortDirection  = "desc" | "asc";
 type UploadUiPhase  = "idle" | "uploading" | "processing" | "done" | "error";
 type ViewMode       = "bookshelf" | "list";
 
+/** Keeps a panel mounted through its fade-out so closing animates instead of vanishing instantly. */
+function useFadeMount(visible: boolean, durationMs = 180): { mounted: boolean; entered: boolean } {
+  const [mounted, setMounted] = useState(visible);
+  const [entered, setEntered] = useState(visible);
+  useEffect(() => {
+    if (visible) {
+      setMounted(true);
+      const raf = requestAnimationFrame(() => setEntered(true));
+      return () => cancelAnimationFrame(raf);
+    }
+    setEntered(false);
+    const t = window.setTimeout(() => setMounted(false), durationMs);
+    return () => window.clearTimeout(t);
+  }, [visible, durationMs]);
+  return { mounted, entered };
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function FolderPage() {
@@ -74,8 +91,11 @@ export default function FolderPage() {
   const [viewMode,          setViewMode]          = useState<ViewMode>("bookshelf");
   /** Admin delete: confirm before removing a volume from the folder. */
   const [filePendingDelete, setFilePendingDelete] = useState<FolderFile | null>(null);
+  const fileDeleteFade = useFadeMount(!!filePendingDelete);
   /** Drives the "book opening into view" entrance transition once the folder data is ready. */
   const [contentSettled, setContentSettled] = useState(false);
+  /** Fades the page out before navigating back to the dashboard, instead of an instant cut. */
+  const [leavingToDashboard, setLeavingToDashboard] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadUi, setUploadUi] = useState<{
     phase: UploadUiPhase; percent: number; indeterminate: boolean; fileCount: number;
@@ -245,6 +265,13 @@ export default function FolderPage() {
     return () => cancelAnimationFrame(raf);
   }, [folder]);
 
+  const goBackToDashboard = () => {
+    if (leavingToDashboard) return;
+    setLeavingToDashboard(true);
+    // Matches the section's opacity transition duration below so navigation waits for the fade.
+    window.setTimeout(() => router.push("/dashboard"), 380);
+  };
+
   useEffect(() => {
     if (uploadUi.phase !== "done") return;
     const t = window.setTimeout(() => {
@@ -375,7 +402,7 @@ export default function FolderPage() {
           minHeight: "100vh",
           padding: "0 0 64px",
           position: "relative",
-          opacity: contentSettled ? 1 : 0,
+          opacity: contentSettled && !leavingToDashboard ? 1 : 0,
           /* "none" (not an identity transform like translateY(0)) once settled — any non-none
              transform on this ancestor would create a CSS containing block, breaking the fixed
              positioning of the DocumentChatWidget it wraps (bubble/panel would clip to this
@@ -424,7 +451,8 @@ export default function FolderPage() {
             <div style={{ marginBottom: 12 }}>
               <button
                 type="button"
-                onClick={() => router.push("/dashboard")}
+                onClick={goBackToDashboard}
+                disabled={leavingToDashboard}
                 style={{
                   display: "inline-flex", alignItems: "center", gap: 8,
                   fontFamily: fontSerif, fontSize: 13, color: C.navy,
@@ -432,7 +460,7 @@ export default function FolderPage() {
                   border: `1px solid ${C.border}`,
                   borderRadius: 4,
                   padding: "6px 14px",
-                  cursor: "pointer",
+                  cursor: leavingToDashboard ? "default" : "pointer",
                   transition: "border-color 150ms, box-shadow 150ms",
                 }}
                 aria-label="Back to dashboard"
@@ -728,7 +756,7 @@ export default function FolderPage() {
         <DocumentChatWidget folderId={folderId} contextLabel={folder.foldername} />
       </section>
 
-      {filePendingDelete && (
+      {fileDeleteFade.mounted && (
         <div
           role="dialog"
           aria-modal
@@ -739,6 +767,8 @@ export default function FolderPage() {
             background: "rgba(10,16,34,0.38)",
             display: "flex", alignItems: "center", justifyContent: "center",
             padding: 16,
+            opacity: fileDeleteFade.entered ? 1 : 0,
+            transition: "opacity 180ms ease",
           }}
         >
           <div
@@ -748,6 +778,8 @@ export default function FolderPage() {
               background: C.paper, border: `1px solid ${C.border}`,
               borderRadius: 6, padding: "20px 22px",
               boxShadow: "0 12px 40px rgba(0,0,0,0.12)",
+              transform: fileDeleteFade.entered ? "translateY(0) scale(1)" : "translateY(8px) scale(0.98)",
+              transition: "transform 180ms ease",
             }}
           >
             <h2 id="delete-volume-title" style={{
@@ -760,7 +792,7 @@ export default function FolderPage() {
               fontFamily: fontSerif, fontSize: 13, color: C.textMid,
               marginTop: 10, lineHeight: 1.5, wordBreak: "break-word",
             }}>
-              <strong>{filePendingDelete.filename}</strong> will be removed from this folder. This cannot be undone.
+              <strong>{filePendingDelete?.filename}</strong> will be removed from this folder. This cannot be undone.
             </p>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 22 }}>
               <button
@@ -779,18 +811,29 @@ export default function FolderPage() {
                 type="button"
                 disabled={deleteFileMutation.isPending}
                 onClick={() => {
-                  const id = filePendingDelete.id;
-                  deleteFileMutation.mutate(id, {
+                  if (!filePendingDelete) return;
+                  deleteFileMutation.mutate(filePendingDelete.id, {
                     onSettled: () => setFilePendingDelete(null),
                   });
                 }}
                 style={{
+                  display: "inline-flex", alignItems: "center", gap: 8,
                   fontFamily: fontSerif, fontSize: 13, padding: "8px 16px",
                   borderRadius: 4, border: "none",
                   background: "#a53c2e", color: "#fff", cursor: "pointer",
                   opacity: deleteFileMutation.isPending ? 0.7 : 1,
                 }}
               >
+                {deleteFileMutation.isPending && (
+                  <span
+                    aria-hidden
+                    style={{
+                      width: 13, height: 13, borderRadius: "50%",
+                      border: "2px solid rgba(255,255,255,0.35)", borderTopColor: "#fff",
+                      animation: "folderSpinnerSpin 700ms linear infinite",
+                    }}
+                  />
+                )}
                 {deleteFileMutation.isPending ? "Deleting…" : "Delete"}
               </button>
             </div>

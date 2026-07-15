@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 const fontSerif = "'Playfair Display', Georgia, serif";
 const fontBody = "'Source Serif 4', Georgia, serif";
@@ -19,6 +19,20 @@ interface AdminActionLoadingOverlayProps {
 
 /** Blocks the UI while an admin user-management mutation is in flight. */
 export function AdminActionLoadingOverlay({ open, message }: AdminActionLoadingOverlayProps) {
+  const [mounted, setMounted] = useState(open);
+  const [entered, setEntered] = useState(open);
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      const raf = requestAnimationFrame(() => setEntered(true));
+      return () => cancelAnimationFrame(raf);
+    }
+    setEntered(false);
+    const t = window.setTimeout(() => setMounted(false), 160);
+    return () => window.clearTimeout(t);
+  }, [open]);
+
   useEffect(() => {
     if (!open) {
       return;
@@ -30,7 +44,7 @@ export function AdminActionLoadingOverlay({ open, message }: AdminActionLoadingO
     };
   }, [open]);
 
-  if (!open) {
+  if (!mounted) {
     return null;
   }
 
@@ -46,6 +60,8 @@ export function AdminActionLoadingOverlay({ open, message }: AdminActionLoadingO
         padding: 16,
         background: "rgba(26,39,68,0.45)",
         backdropFilter: "blur(3px)",
+        opacity: entered ? 1 : 0,
+        transition: "opacity 160ms ease",
       }}
     >
       <div style={{
@@ -55,6 +71,8 @@ export function AdminActionLoadingOverlay({ open, message }: AdminActionLoadingO
         background: `linear-gradient(180deg, #ffffff 0%, ${C.paper} 100%)`,
         padding: "36px 30px",
         boxShadow: "0 20px 50px rgba(15,23,42,0.22)",
+        transform: entered ? "scale(1)" : "scale(0.97)",
+        transition: "transform 160ms ease",
       }}>
         <div
           aria-hidden

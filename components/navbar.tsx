@@ -20,6 +20,23 @@ const C = {
   muted: "#a07848",
 };
 
+/** Keeps a panel mounted through its fade-out so closing animates instead of vanishing instantly. */
+function useFadeMount(visible: boolean, durationMs = 160): { mounted: boolean; entered: boolean } {
+  const [mounted, setMounted] = useState(visible);
+  const [entered, setEntered] = useState(visible);
+  useEffect(() => {
+    if (visible) {
+      setMounted(true);
+      const raf = requestAnimationFrame(() => setEntered(true));
+      return () => cancelAnimationFrame(raf);
+    }
+    setEntered(false);
+    const t = window.setTimeout(() => setMounted(false), durationMs);
+    return () => window.clearTimeout(t);
+  }, [visible, durationMs]);
+  return { mounted, entered };
+}
+
 export function Navbar() {
   const router = useRouter();
   const auth = useAuth();
@@ -32,6 +49,7 @@ export function Navbar() {
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const dropdownFade = useFadeMount(dropdownOpen);
 
   const logoutMutation = useMutation({
     mutationFn: signOut,
@@ -78,30 +96,8 @@ export function Navbar() {
           </span>
         </Link>
 
-        {/* ── Right: dashboard + avatar menu ── */}
+        {/* ── Right: avatar menu ── */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-
-          <Link
-            href="/dashboard"
-            style={{
-              fontFamily: fontBody, fontSize: 13,
-              color: C.navy, textDecoration: "none",
-              padding: "6px 14px",
-              border: `1px solid ${C.navy}`,
-              borderRadius: 4,
-              transition: "background 200ms, color 200ms",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLAnchorElement).style.background = C.navy;
-              (e.currentTarget as HTMLAnchorElement).style.color = "white";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLAnchorElement).style.background = "transparent";
-              (e.currentTarget as HTMLAnchorElement).style.color = C.navy;
-            }}
-          >
-            Dashboard
-          </Link>
 
           {/* Avatar pill with dropdown */}
           <div ref={dropdownRef} style={{ position: "relative" }}>
@@ -137,13 +133,17 @@ export function Navbar() {
             </button>
 
             {/* Dropdown panel */}
-            {dropdownOpen && (
+            {dropdownFade.mounted && (
               <div style={{
                 position: "absolute", top: "calc(100% + 8px)", right: 0,
                 background: C.paper, border: `1px solid ${C.border}`,
                 borderRadius: 6, minWidth: 192,
                 boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
                 zIndex: 100, overflow: "hidden",
+                opacity: dropdownFade.entered ? 1 : 0,
+                transform: dropdownFade.entered ? "translateY(0)" : "translateY(-6px)",
+                transition: "opacity 160ms ease, transform 160ms ease",
+                pointerEvents: dropdownFade.entered ? "auto" : "none",
               }}>
                 {/* User info header */}
                 <div style={{

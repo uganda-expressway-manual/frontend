@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 const fontSerif = "'Playfair Display', Georgia, serif";
 const fontBody = "'Source Serif 4', Georgia, serif";
@@ -28,6 +28,20 @@ export function DeleteUserConfirmDialog({
   onConfirm,
   pending,
 }: DeleteUserConfirmDialogProps) {
+  const [mounted, setMounted] = useState(open);
+  const [entered, setEntered] = useState(open);
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      const raf = requestAnimationFrame(() => setEntered(true));
+      return () => cancelAnimationFrame(raf);
+    }
+    setEntered(false);
+    const t = window.setTimeout(() => setMounted(false), 180);
+    return () => window.clearTimeout(t);
+  }, [open]);
+
   useEffect(() => {
     if (!open) {
       return;
@@ -52,12 +66,15 @@ export function DeleteUserConfirmDialog({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, pending, onCancel]);
 
-  if (!open) {
+  if (!mounted) {
     return null;
   }
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
+      opacity: entered ? 1 : 0, transition: "opacity 180ms ease",
+    }}>
       <button
         type="button"
         aria-label="Dismiss"
@@ -82,6 +99,8 @@ export function DeleteUserConfirmDialog({
           background: C.paper, padding: 24,
           boxShadow: "0 16px 48px rgba(15,23,42,0.20)",
           fontFamily: fontBody,
+          transform: entered ? "translateY(0) scale(1)" : "translateY(8px) scale(0.98)",
+          transition: "transform 180ms ease",
         }}
       >
         <h2 id="delete-user-confirm-title" style={{ fontFamily: fontSerif, fontSize: 18, fontWeight: 700, color: C.navy }}>

@@ -48,6 +48,65 @@ interface GlobalFindItem {
 /* ═══════════════════════════════════════════════════════════════
    FolderBrowser (top-level export — data & state unchanged)
 ═══════════════════════════════════════════════════════════════ */
+
+/** Keeps a panel mounted through its fade-out so closing animates instead of vanishing instantly. */
+function useFadeMount(visible: boolean, durationMs = 180): { mounted: boolean; entered: boolean } {
+  const [mounted, setMounted] = useState(visible);
+  const [entered, setEntered] = useState(visible);
+  useEffect(() => {
+    if (visible) {
+      setMounted(true);
+      const raf = requestAnimationFrame(() => setEntered(true));
+      return () => cancelAnimationFrame(raf);
+    }
+    setEntered(false);
+    const t = window.setTimeout(() => setMounted(false), durationMs);
+    return () => window.clearTimeout(t);
+  }, [visible, durationMs]);
+  return { mounted, entered };
+}
+
+/** Shared backdrop + dialog wrapper: fades in on open, fades out on close instead of snapping. */
+function FadeOverlay({
+  open, onClose, zIndex = 1000, backdrop = "rgba(10,16,34,0.45)", ariaLabel, children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  zIndex?: number;
+  backdrop?: string;
+  ariaLabel?: string;
+  children: ReactNode;
+}) {
+  const { mounted, entered } = useFadeMount(open);
+  if (!mounted) return null;
+  return (
+    <div
+      role="dialog"
+      aria-modal
+      aria-label={ariaLabel}
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex,
+        background: backdrop,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: 16,
+        opacity: entered ? 1 : 0,
+        transition: "opacity 180ms ease",
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          transform: entered ? "translateY(0) scale(1)" : "translateY(8px) scale(0.98)",
+          transition: "transform 180ms ease",
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export function FolderBrowser() {
   const queryClient = useQueryClient();
   const pathname = usePathname();
@@ -61,6 +120,7 @@ export function FolderBrowser() {
   const [newFolderName, setNewFolderName] = useState("");
   const [newFolderLock, setNewFolderLock] = useState(false);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
+  const createFolderFade = useFadeMount(showCreateFolder);
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   const [folderNameDraft, setFolderNameDraft] = useState("");
   const [folderLockDraft, setFolderLockDraft] = useState(false);
@@ -238,11 +298,14 @@ export function FolderBrowser() {
         </div>
 
         {/* Create folder panel */}
-        {admin && showCreateFolder && (
+        {admin && createFolderFade.mounted && (
           <div style={{
             marginTop: 14, padding: "14px 16px",
             background: "#f0ebe0", border: `1px solid ${C.border}`,
             borderRadius: 4,
+            opacity: createFolderFade.entered ? 1 : 0,
+            transform: createFolderFade.entered ? "translateY(0)" : "translateY(-6px)",
+            transition: "opacity 180ms ease, transform 180ms ease",
           }}>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
               <input
@@ -371,158 +434,137 @@ export function FolderBrowser() {
       ))}
 
       {/* Admin: folder edit floats over shelf (layout does not shift) */}
-      {admin && editingFolderId && (
-        <div
-          role="dialog"
-          aria-modal
-          aria-labelledby="folder-edit-title"
-          onClick={() => { setEditingFolderId(null); setFolderNameDraft(""); setFolderLockDraft(false); }}
-          style={{
-            position: "fixed", inset: 0, zIndex: 940,
-            background: "rgba(10,16,34,0.38)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            padding: 16,
-          }}
+      {admin && (
+        <FadeOverlay
+          open={!!editingFolderId}
+          onClose={() => { setEditingFolderId(null); setFolderNameDraft(""); setFolderLockDraft(false); }}
+          zIndex={940}
+          backdrop="rgba(10,16,34,0.38)"
+          ariaLabel="Edit folder"
         >
-          <div onClick={(e) => e.stopPropagation()}>
-            <p id="folder-edit-title" style={{ fontFamily: fontSerif, fontSize: 16, fontWeight: 700, color: C.navy, marginBottom: 10 }}>
-              Edit folder
-            </p>
-            <EditPanel
-              nameDraft={folderNameDraft}
-              lockDraft={folderLockDraft}
-              onNameChange={setFolderNameDraft}
-              onLockChange={setFolderLockDraft}
-              onSave={() => {
-                renameFolderMutation.mutate({
-                  folderId: editingFolderId,
-                  foldername: folderNameDraft.trim(),
-                  lock: folderLockDraft,
-                });
-              }}
-              onCancel={() => { setEditingFolderId(null); setFolderNameDraft(""); setFolderLockDraft(false); }}
-              onRequestDelete={() => {
-                const f = orderedFolders.find((x) => x.id === editingFolderId);
-                if (f) setDeleteConfirm({ id: f.id, name: f.foldername });
-              }}
-              renamePending={renameFolderMutation.isPending}
-              deletePending={deleteFolderMutation.isPending}
-            />
-          </div>
-        </div>
+          <EditPanel
+            nameDraft={folderNameDraft}
+            lockDraft={folderLockDraft}
+            onNameChange={setFolderNameDraft}
+            onLockChange={setFolderLockDraft}
+            onSave={() => {
+              if (!editingFolderId) return;
+              renameFolderMutation.mutate({
+                folderId: editingFolderId,
+                foldername: folderNameDraft.trim(),
+                lock: folderLockDraft,
+              });
+            }}
+            onCancel={() => { setEditingFolderId(null); setFolderNameDraft(""); setFolderLockDraft(false); }}
+            onRequestDelete={() => {
+              const f = orderedFolders.find((x) => x.id === editingFolderId);
+              if (f) setDeleteConfirm({ id: f.id, name: f.foldername });
+            }}
+            renamePending={renameFolderMutation.isPending}
+            deletePending={deleteFolderMutation.isPending}
+          />
+        </FadeOverlay>
       )}
 
       {/* ── Locked book modal ── */}
-      {lockedModal && (
+      <FadeOverlay open={!!lockedModal} onClose={() => setLockedModal(null)}>
         <div
-          role="dialog"
-          aria-modal
-          onClick={() => setLockedModal(null)}
           style={{
-            position: "fixed", inset: 0, zIndex: 1000,
-            background: "rgba(10,16,34,0.45)",
-            display: "flex", alignItems: "center", justifyContent: "center",
+            background: C.paper, border: `1px solid ${C.border}`,
+            borderRadius: 6, padding: "28px 32px", maxWidth: 360,
+            boxShadow: "0 20px 60px rgba(0,0,0,0.20)",
+            textAlign: "center",
           }}
         >
-          <div
-            onClick={e => e.stopPropagation()}
+          <div style={{ fontSize: 28, marginBottom: 14 }}>🔒</div>
+          <h3 style={{ fontFamily: fontSerif, fontSize: 18, color: C.navy, marginBottom: 10 }}>
+            Restricted Manual
+          </h3>
+          <p style={{ fontFamily: fontBody, fontSize: 13, color: C.muted, marginBottom: 16, lineHeight: 1.55 }}>
+            This manual is restricted.
+            <br />
+            Contact{" "}
+            <a href="mailto:kisong3007@kecbd.com" style={{ color: C.gold }}>
+              kisong3007@kecbd.com
+            </a>{" "}
+            to request access.
+          </p>
+          <button
+            type="button"
+            onClick={() => setLockedModal(null)}
             style={{
-              background: C.paper, border: `1px solid ${C.border}`,
-              borderRadius: 6, padding: "28px 32px", maxWidth: 360,
-              boxShadow: "0 20px 60px rgba(0,0,0,0.20)",
-              textAlign: "center",
+              fontFamily: fontBody, fontSize: 13, color: C.navy,
+              background: "transparent", border: `1px solid ${C.navy}`,
+              borderRadius: 4, padding: "7px 20px", cursor: "pointer",
             }}
           >
-            <div style={{ fontSize: 28, marginBottom: 14 }}>🔒</div>
-            <h3 style={{ fontFamily: fontSerif, fontSize: 18, color: C.navy, marginBottom: 10 }}>
-              Restricted Manual
-            </h3>
-            <p style={{ fontFamily: fontBody, fontSize: 13, color: C.muted, marginBottom: 16, lineHeight: 1.55 }}>
-              This manual is restricted.
-              <br />
-              Contact{" "}
-              <a href="mailto:kisong3007@kecbd.com" style={{ color: C.gold }}>
-                kisong3007@kecbd.com
-              </a>{" "}
-              to request access.
-            </p>
+            Close
+          </button>
+        </div>
+      </FadeOverlay>
+
+      {/* ── Confirm delete folder ── */}
+      <FadeOverlay open={!!deleteConfirm} onClose={() => setDeleteConfirm(null)} ariaLabel="Delete folder?">
+        <div
+          style={{
+            background: C.paper, border: `1px solid ${C.border}`,
+            borderRadius: 6, padding: "26px 28px", maxWidth: 400, width: "100%",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.20)",
+          }}
+        >
+          <h3 style={{
+            fontFamily: fontSerif, fontSize: 18, color: C.navy, marginBottom: 12,
+          }}>
+            Delete folder?
+          </h3>
+          <p style={{ fontFamily: fontBody, fontSize: 14, color: C.muted, lineHeight: 1.55, marginBottom: 20 }}>
+            This will permanently delete <strong style={{ color: C.navy }}>{deleteConfirm?.name}</strong>
+            {" "}and remove its volumes from the library. This cannot be undone.
+          </p>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
             <button
               type="button"
-              onClick={() => setLockedModal(null)}
+              onClick={() => setDeleteConfirm(null)}
               style={{
                 fontFamily: fontBody, fontSize: 13, color: C.navy,
-                background: "transparent", border: `1px solid ${C.navy}`,
-                borderRadius: 4, padding: "7px 20px", cursor: "pointer",
+                background: "white", border: `1px solid ${C.border}`,
+                borderRadius: 4, padding: "8px 16px", cursor: "pointer",
               }}
             >
-              Close
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={deleteFolderMutation.isPending}
+              onClick={() => {
+                if (!deleteConfirm) return;
+                deleteFolderMutation.mutate(deleteConfirm.id, {
+                  onSettled: () => setDeleteConfirm(null),
+                });
+              }}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 8,
+                fontFamily: fontBody, fontSize: 13, color: "white",
+                background: "#c0392b", border: "none",
+                borderRadius: 4, padding: "8px 16px", cursor: "pointer",
+                opacity: deleteFolderMutation.isPending ? 0.7 : 1,
+              }}
+            >
+              {deleteFolderMutation.isPending && (
+                <span
+                  aria-hidden
+                  style={{
+                    width: 13, height: 13, borderRadius: "50%",
+                    border: "2px solid rgba(255,255,255,0.35)", borderTopColor: "#fff",
+                    animation: "folderSpinnerSpin 700ms linear infinite",
+                  }}
+                />
+              )}
+              {deleteFolderMutation.isPending ? "Deleting…" : "Delete folder"}
             </button>
           </div>
         </div>
-      )}
-
-      {/* ── Confirm delete folder ── */}
-      {deleteConfirm && (
-        <div
-          role="alertdialog"
-          aria-modal
-          aria-labelledby="delete-folder-title"
-          onClick={() => setDeleteConfirm(null)}
-          style={{
-            position: "fixed", inset: 0, zIndex: 1000,
-            background: "rgba(10,16,34,0.45)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            padding: 16,
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: C.paper, border: `1px solid ${C.border}`,
-              borderRadius: 6, padding: "26px 28px", maxWidth: 400, width: "100%",
-              boxShadow: "0 20px 60px rgba(0,0,0,0.20)",
-            }}
-          >
-            <h3 id="delete-folder-title" style={{
-              fontFamily: fontSerif, fontSize: 18, color: C.navy, marginBottom: 12,
-            }}>
-              Delete folder?
-            </h3>
-            <p style={{ fontFamily: fontBody, fontSize: 14, color: C.muted, lineHeight: 1.55, marginBottom: 20 }}>
-              This will permanently delete <strong style={{ color: C.navy }}>{deleteConfirm.name}</strong>
-              {" "}and remove its volumes from the library. This cannot be undone.
-            </p>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button
-                type="button"
-                onClick={() => setDeleteConfirm(null)}
-                style={{
-                  fontFamily: fontBody, fontSize: 13, color: C.navy,
-                  background: "white", border: `1px solid ${C.border}`,
-                  borderRadius: 4, padding: "8px 16px", cursor: "pointer",
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={deleteFolderMutation.isPending}
-                onClick={() => deleteFolderMutation.mutate(deleteConfirm.id, {
-                  onSettled: () => setDeleteConfirm(null),
-                })}
-                style={{
-                  fontFamily: fontBody, fontSize: 13, color: "white",
-                  background: "#c0392b", border: "none",
-                  borderRadius: 4, padding: "8px 16px", cursor: "pointer",
-                  opacity: deleteFolderMutation.isPending ? 0.7 : 1,
-                }}
-              >
-                {deleteFolderMutation.isPending ? "Deleting…" : "Delete folder"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      </FadeOverlay>
 
       <DocumentChatWidget />
     </section>
@@ -704,7 +746,7 @@ function BookSpine({
   const H = BOOK_SPINE_H;
 
   const transform =
-    isPulling ? "translateY(-96px) scale(1.16) rotateZ(-3deg)" :
+    isPulling ? "translateY(-96px) scale(1.16)" :
       isHovered ? (isTouch ? "scale(1.03)" : "translateZ(20px) translateY(-20px)") :
         isDragOver ? "translateY(-12px)" :
           "none";
@@ -759,13 +801,12 @@ function BookSpine({
             }}
           />
         )}
-        {/* Main spine face */}
+        {/* Main spine face — cream base is always present; the sealed/locked color wipes in
+            over it (and back out) top-to-bottom instead of snapping instantly on lock toggle. */}
         <div
           style={{
             width: W, height: H,
-            background: openReferenceSpine
-              ? `linear-gradient(160deg,#faf8f3 0%,#ebe3d6 42%,#e0d4c8 100%)`
-              : color,
+            background: `linear-gradient(160deg,#faf8f3 0%,#ebe3d6 42%,#e0d4c8 100%)`,
             position: "relative",
             display: "flex",
             flexDirection: "column",
@@ -778,10 +819,21 @@ function BookSpine({
             border: openReferenceSpine ? `1px solid rgba(26,39,68,0.12)` : "none",
           }}
         >
+          {/* Sealed/locked color — wipes down from top when locking, retreats when unlocking */}
+          <div
+            aria-hidden
+            style={{
+              position: "absolute", inset: 0, borderRadius: 2,
+              background: color,
+              clipPath: openReferenceSpine ? "inset(0 0 100% 0)" : "inset(0 0 0% 0)",
+              transition: "clip-path 480ms ease",
+            }}
+          />
           {/* Top cap */}
           <div style={{
             position: "absolute", top: 0, left: 0, right: 0, height: 16,
             background: openReferenceSpine ? "rgba(26,39,68,0.06)" : "rgba(0,0,0,0.22)",
+            transition: "background-color 480ms ease",
           }} />
 
           {/* Brand label — parchment stamp, navy serif (matches spine typography) */}

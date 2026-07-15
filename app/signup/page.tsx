@@ -186,6 +186,30 @@ export default function SignUpPage() {
     return () => window.clearTimeout(id);
   }, [registrationSucceeded, successRevealPhase]);
 
+  /** Fades the "Account created" details in once revealed, and out again before leaving for /login. */
+  const [detailsVisible, setDetailsVisible] = useState(false);
+  const [continuingToLogin, setContinuingToLogin] = useState(false);
+  useEffect(() => {
+    if (successRevealPhase !== "details" || continuingToLogin) {
+      setDetailsVisible(false);
+      return;
+    }
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => setDetailsVisible(true));
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  }, [successRevealPhase, continuingToLogin]);
+  const continueToLogin = () => {
+    if (continuingToLogin) return;
+    setContinuingToLogin(true);
+    setDetailsVisible(false);
+    window.setTimeout(() => router.push("/login"), 220);
+  };
+
   useEffect(() => {
     if (!passwordBlinkTick) return;
     const el = passwordInputRef.current;
@@ -295,52 +319,6 @@ export default function SignUpPage() {
             position: "absolute", inset: 0,
             background: "linear-gradient(160deg, rgba(10,18,40,0.45) 0%, rgba(10,18,40,0.82) 100%)",
           }} />
-          <div style={{
-            position: "relative", zIndex: 1,
-            textAlign: "center", padding: "0 28px",
-            display: "flex", flexDirection: "column", alignItems: "center",
-          }}>
-            <p style={{
-              fontFamily: fontBody, fontSize: 9, color: C.gold,
-              letterSpacing: "0.18em", textTransform: "uppercase",
-              marginBottom: 16,
-            }}>
-              Ministry of Works &amp; Transport
-            </p>
-            <h1 style={{
-              fontFamily: fontSerif, fontSize: 36, fontWeight: 700,
-              color: "white", lineHeight: 1.2, marginBottom: 0,
-            }}>
-              Expressway<br />Integrated Manual
-            </h1>
-            <div style={{
-              width: 36, height: 1.5, background: C.gold,
-              margin: "14px 0",
-            }} />
-            <p style={{
-              fontFamily: fontBody, fontSize: 13, fontStyle: "italic",
-              color: "rgba(255,255,255,0.65)", lineHeight: 1.6,
-            }}>
-              Create your account to access<br />the complete reference library
-            </p>
-            {/* Partner pills */}
-            <div style={{
-              position: "absolute", bottom: 28,
-              display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center",
-            }}>
-              {["EX", "DOHWA", "CHEIL", "KOICA"].map(name => (
-                <span key={name} style={{
-                  fontFamily: fontSerif, fontSize: 9,
-                  color: "rgba(255,255,255,0.45)",
-                  border: "0.5px solid rgba(255,255,255,0.2)",
-                  padding: "3px 8px", borderRadius: 2,
-                  letterSpacing: "0.06em",
-                }}>
-                  {name}
-                </span>
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* ── Center spine binding ── */}
@@ -399,7 +377,12 @@ export default function SignUpPage() {
                 />
               </div>
               {successRevealPhase === "details" && (
-                <>
+                <div style={{
+                  display: "flex", flexDirection: "column", alignItems: "center", gap: 20,
+                  opacity: detailsVisible ? 1 : 0,
+                  transform: detailsVisible ? "translateY(0)" : "translateY(10px)",
+                  transition: "opacity 260ms ease, transform 260ms ease",
+                }}>
                   <div>
                     <h2 style={{ fontFamily: fontSerif, fontSize: 22, fontWeight: 700, color: C.navy, marginBottom: 6 }}>
                       Account created
@@ -410,22 +393,24 @@ export default function SignUpPage() {
                       <span style={{ color: C.navy, fontWeight: 600 }}>{email.trim()}</span> when you&apos;re ready.
                     </p>
                   </div>
-                  <Link
-                    href="/login"
+                  <button
+                    type="button"
+                    onClick={continueToLogin}
+                    disabled={continuingToLogin}
                     style={{
                       display: "block", width: "100%", maxWidth: 280,
                       padding: "13px 0", textAlign: "center",
                       fontFamily: fontBody, fontSize: 14, letterSpacing: "0.08em",
                       color: "white", background: C.navy,
-                      border: "none", borderRadius: 3, textDecoration: "none",
+                      border: "none", borderRadius: 3, cursor: continuingToLogin ? "default" : "pointer",
                       transition: "background 200ms",
                     }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.background = C.gold; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.background = C.navy; }}
+                    onMouseEnter={e => { if (!continuingToLogin) (e.currentTarget as HTMLButtonElement).style.background = C.gold; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = C.navy; }}
                   >
                     Continue to sign in
-                  </Link>
-                </>
+                  </button>
+                </div>
               )}
             </div>
           ) : (
@@ -526,6 +511,7 @@ export default function SignUpPage() {
                             id="signup-password"
                             type={isPasswordHidden ? "password" : "text"}
                             autoComplete="new-password"
+                            placeholder="Password"
                             value={password}
                             onChange={e => {
                               const v = e.target.value;

@@ -48,9 +48,13 @@ function useLoadingDots(active: boolean): string {
   return active ? ".".repeat(count) : "";
 }
 
+/** Fade-out/fade-in duration for swapping between the email and password steps. */
+const STEP_FADE_MS = 200;
+
 export default function LoginPage() {
   const router = useRouter();
   const [step,              setStep]              = useState<AuthStep>("email");
+  const [stepVisible,       setStepVisible]       = useState(true);
   const [email,             setEmail]             = useState("");
   const [password,          setPassword]          = useState("");
   const [isPasswordHidden,  setIsPasswordHidden]  = useState(true);
@@ -60,11 +64,23 @@ export default function LoginPage() {
   const [focusedField,      setFocusedField]      = useState<string | null>(null);
   /** DOM timer id — avoids `Timeout` vs `number` clash when `@types/node` merges globals. */
   const exitTimerRef       = useRef<number | null>(null);
+  const stepTimerRef       = useRef<number | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
   useEffect(() => () => {
     if (exitTimerRef.current) window.clearTimeout(exitTimerRef.current);
+    if (stepTimerRef.current) window.clearTimeout(stepTimerRef.current);
   }, []);
+
+  /** Fades the current step out, swaps it, then fades the new step in — no slide. */
+  const goToStep = (next: AuthStep) => {
+    if (stepTimerRef.current) window.clearTimeout(stepTimerRef.current);
+    setStepVisible(false);
+    stepTimerRef.current = window.setTimeout(() => {
+      setStep(next);
+      requestAnimationFrame(() => requestAnimationFrame(() => setStepVisible(true)));
+    }, STEP_FADE_MS);
+  };
 
   const cardVisible = mounted && !exiting;
   const closeToHome = () => {
@@ -91,7 +107,7 @@ export default function LoginPage() {
     if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return;
     setEmailAlert(null);
 
-    if (AUTH_CHECK_EMAIL_DISABLED) { setEmail(trimmed); setStep("password"); return; }
+    if (AUTH_CHECK_EMAIL_DISABLED) { setEmail(trimmed); goToStep("password"); return; }
 
     try {
       const result = await checkEmailMutation.mutateAsync(trimmed);
@@ -105,7 +121,7 @@ export default function LoginPage() {
           showSignupLink: false,
         }); return;
       }
-      setEmail(trimmed); setStep("password");
+      setEmail(trimmed); goToStep("password");
     } catch (error) {
       setEmailAlert({ message: getBackendErrorMessage(error, "Could not verify this email. Try again."), showSignupLink: false });
     }
@@ -211,7 +227,7 @@ export default function LoginPage() {
           {step === "password" && (
             <button
               type="button"
-              onClick={() => { setStep("email"); setPassword(""); setEmailAlert(null); loginMutation.reset(); }}
+              onClick={() => { goToStep("email"); setPassword(""); setEmailAlert(null); loginMutation.reset(); }}
               style={{
                 position: "absolute", top: 16, left: 16,
                 display: "flex", alignItems: "center", justifyContent: "center",
@@ -247,106 +263,99 @@ export default function LoginPage() {
             </p>
           </div>
 
-          {/* ── Step slider: password step slides in from the right ── */}
-          <div style={{ overflow: "hidden" }}>
-            <div style={{
-              display: "flex",
-              width: "200%",
-              transform: step === "email" ? "translateX(0)" : "translateX(-50%)",
-              transition: "transform 320ms cubic-bezier(0.25, 0.46, 0.45, 0.94)",
-            }}>
-              {/* Email step */}
-              <div style={{ width: "50%", flexShrink: 0, paddingRight: 4, boxSizing: "border-box" }}>
-                <form onSubmit={onSubmitEmail} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                  <UnderlineField
-                    id="login-email"
-                    type="email"
-                    label="Email address"
-                    value={email}
-                    autoComplete="email"
-                    placeholder="you@example.com"
-                    focused={focusedField === "email"}
-                    onFocus={() => setFocusedField("email")}
-                    onBlur={() => setFocusedField(null)}
-                    onChange={v => { setEmail(v); setEmailAlert(null); }}
-                    required
-                  />
+          {/* ── Step content: fades out, swaps, fades back in (no slide) ── */}
+          <div style={{
+            opacity: stepVisible ? 1 : 0,
+            transition: `opacity ${STEP_FADE_MS}ms ease`,
+          }}>
+            {step === "email" ? (
+              <form onSubmit={onSubmitEmail} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                <UnderlineField
+                  id="login-email"
+                  type="email"
+                  label="Email address"
+                  value={email}
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                  focused={focusedField === "email"}
+                  onFocus={() => setFocusedField("email")}
+                  onBlur={() => setFocusedField(null)}
+                  onChange={v => { setEmail(v); setEmailAlert(null); }}
+                  required
+                />
 
-                  {emailAlert && (
-                    <div role="alert" style={{
-                      fontFamily: fontBody, fontSize: 12, color: "#c0392b",
-                      lineHeight: 1.5,
-                    }}>
-                      <p>{emailAlert.message}{emailAlert.showSignupLink && (
-                        <> {" "}<Link href="/signup" style={{ color: C.gold }}>Sign up</Link></>
-                      )}</p>
-                      {emailAlert.detail && <p style={{ marginTop: 4 }}>{emailAlert.detail}</p>}
-                    </div>
-                  )}
+                {emailAlert && (
+                  <div role="alert" style={{
+                    fontFamily: fontBody, fontSize: 12, color: "#c0392b",
+                    lineHeight: 1.5,
+                  }}>
+                    <p>{emailAlert.message}{emailAlert.showSignupLink && (
+                      <> {" "}<Link href="/signup" style={{ color: C.gold }}>Sign up</Link></>
+                    )}</p>
+                    {emailAlert.detail && <p style={{ marginTop: 4 }}>{emailAlert.detail}</p>}
+                  </div>
+                )}
 
-                  <SubmitButton pending={checkEmailMutation.isPending} label="Continue" pendingLabel="Checking" />
-                </form>
-              </div>
+                <SubmitButton pending={checkEmailMutation.isPending} label="Continue" pendingLabel="Checking" />
+              </form>
+            ) : (
+              <form onSubmit={onSubmitPassword} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <UnderlineField
+                  id="login-password"
+                  type={isPasswordHidden ? "password" : "text"}
+                  label="Password"
+                  value={password}
+                  autoComplete="current-password"
+                  placeholder="Password"
+                  focused={focusedField === "password"}
+                  onFocus={() => setFocusedField("password")}
+                  onBlur={() => setFocusedField(null)}
+                  onChange={setPassword}
+                  required
+                  minLength={1}
+                  suffix={
+                    <button
+                      type="button"
+                      onClick={() => setIsPasswordHidden(p => !p)}
+                      aria-label={isPasswordHidden ? "Show password" : "Hide password"}
+                      title={isPasswordHidden ? "Show password" : "Hide password"}
+                      style={{
+                        display: "inline-flex", alignItems: "center", justifyContent: "center",
+                        background: "none", border: "none", cursor: "pointer",
+                        color: C.navy, padding: "4px", marginRight: -4,
+                        opacity: 0.55, transition: "opacity 150ms",
+                      }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.55"; }}
+                    >
+                      {isPasswordHidden ? (
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                          <path d="M3 3l18 18" />
+                          <path d="M10.58 10.58a2 2 0 102.84 2.84" />
+                          <path d="M9.88 5.09A10.94 10.94 0 0112 5c5.05 0 9.27 3.11 10 7-.21 1.13-.73 2.2-1.5 3.11" />
+                          <path d="M6.61 6.61C4.62 7.9 3.26 9.82 3 12c.73 3.89 4.95 7 10 7 2.18 0 4.2-.58 5.9-1.59" />
+                        </svg>
+                      ) : (
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                          <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" />
+                          <circle cx="12" cy="12" r="3" />
+                        </svg>
+                      )}
+                    </button>
+                  }
+                />
 
-              {/* Password step */}
-              <div style={{ width: "50%", flexShrink: 0, paddingLeft: 4, boxSizing: "border-box" }}>
-                <form onSubmit={onSubmitPassword} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                  <UnderlineField
-                    id="login-password"
-                    type={isPasswordHidden ? "password" : "text"}
-                    label="Password"
-                    value={password}
-                    autoComplete="current-password"
-                    focused={focusedField === "password"}
-                    onFocus={() => setFocusedField("password")}
-                    onBlur={() => setFocusedField(null)}
-                    onChange={setPassword}
-                    required
-                    minLength={1}
-                    suffix={
-                      <button
-                        type="button"
-                        onClick={() => setIsPasswordHidden(p => !p)}
-                        aria-label={isPasswordHidden ? "Show password" : "Hide password"}
-                        title={isPasswordHidden ? "Show password" : "Hide password"}
-                        style={{
-                          display: "inline-flex", alignItems: "center", justifyContent: "center",
-                          background: "none", border: "none", cursor: "pointer",
-                          color: C.navy, padding: "4px", marginRight: -4,
-                          opacity: 0.55, transition: "opacity 150ms",
-                        }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.55"; }}
-                      >
-                        {isPasswordHidden ? (
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                            <path d="M3 3l18 18" />
-                            <path d="M10.58 10.58a2 2 0 102.84 2.84" />
-                            <path d="M9.88 5.09A10.94 10.94 0 0112 5c5.05 0 9.27 3.11 10 7-.21 1.13-.73 2.2-1.5 3.11" />
-                            <path d="M6.61 6.61C4.62 7.9 3.26 9.82 3 12c.73 3.89 4.95 7 10 7 2.18 0 4.2-.58 5.9-1.59" />
-                          </svg>
-                        ) : (
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                            <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" />
-                            <circle cx="12" cy="12" r="3" />
-                          </svg>
-                        )}
-                      </button>
-                    }
-                  />
+                {loginMutation.error && (
+                  <p role="alert" style={{ fontFamily: fontBody, fontSize: 12, color: "#c0392b" }}>
+                    {loginMutation.error instanceof SignInBlockedByAccountStatusError
+                      ? loginMutation.error.message
+                      : LOGIN_CREDENTIALS_ERROR}
+                  </p>
+                )}
 
-                  {loginMutation.error && (
-                    <p role="alert" style={{ fontFamily: fontBody, fontSize: 12, color: "#c0392b" }}>
-                      {loginMutation.error instanceof SignInBlockedByAccountStatusError
-                        ? loginMutation.error.message
-                        : LOGIN_CREDENTIALS_ERROR}
-                    </p>
-                  )}
-
-                  <SubmitButton pending={loginMutation.isPending} label="Sign in" pendingLabel="Logging in" />
-                </form>
-              </div>
-            </div>
+                <SubmitButton pending={loginMutation.isPending} label="Sign in" pendingLabel="Logging in" />
+              </form>
+            )}
           </div>
 
           {/* Divider */}

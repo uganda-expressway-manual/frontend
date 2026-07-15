@@ -300,7 +300,7 @@ a {
   animation: signup-password-input-blink 0.45s ease-in-out 4;
 }
 
-/** Sign-up success badge — mint circle pops in; check draws via WAAPI + CSS fallback in `SignupSuccessCheck` */
+/** Sign-up success badge — warm gold circle (matches the paper/navy/gold theme) pops in; check draws via WAAPI + CSS fallback in `SignupSuccessCheck` */
 @keyframes signup-success-mark-pop {
   from {
     opacity: 0;
@@ -318,7 +318,7 @@ a {
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
-  background-color: #d4f8e6;
+  background-color: rgba(201, 124, 42, 0.16);
 }
 
 .signup-success-mark-pop {
@@ -326,7 +326,7 @@ a {
 }
 
 .signup-success-check-path {
-  stroke: #006b4d;
+  stroke: #1a2744;
 }
 
 /** Fallback when `SVGElement.animate` is missing — `--signup-dash` set in JS from path length */

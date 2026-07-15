@@ -23,9 +23,27 @@ const C = {
   bg: "#f4f1ec",
   border: "#d0c4aa",
   muted: "#8a7a60",
-  green: "#2d6a3a",
   red: "#a53c2e",
+  green: "#2d6a3a",
 };
+
+function createUserPasswordChecks(pw: string) {
+  return {
+    lengthOk: pw.length >= 8,
+    lowerOk: /[a-z]/.test(pw),
+    upperOk: /[A-Z]/.test(pw),
+    digitOk: /\d/.test(pw),
+    specialOk: /[^A-Za-z0-9]/.test(pw),
+  };
+}
+
+const CREATE_USER_PW_RULES = [
+  { key: "lengthOk", label: "At least 8 characters" },
+  { key: "lowerOk", label: "One lowercase letter (a–z)" },
+  { key: "upperOk", label: "One uppercase letter (A–Z)" },
+  { key: "digitOk", label: "At least one number (0–9)" },
+  { key: "specialOk", label: "One special character (e.g. *&!)" },
+] as const;
 
 function ButtonSpinner() {
   return (
@@ -55,6 +73,8 @@ export function AdminUsersPanel() {
   const [statusFilter, setStatusFilter] = useState<"ALL" | UserStatus>("ALL");
   const [userPendingDelete, setUserPendingDelete] = useState<AppUser | null>(null);
   const [actionNotice, setActionNotice] = useState<{ title: string; message: string } | null>(null);
+  /** Briefly highlights the row for a user the admin just created. */
+  const [highlightedUserId, setHighlightedUserId] = useState<string | null>(null);
 
   const usersQuery = useQuery({
     queryKey: ["users"],
@@ -83,11 +103,24 @@ export function AdminUsersPanel() {
         appBaseUrl: APP_PUBLIC_BASE_URL,
         usersPortalUrl: APP_USERS_PORTAL_URL,
       }),
-    onSuccess: () => {
+    onSuccess: async () => {
+      const createdEmail = email.trim().toLowerCase();
+      const label = email.trim() || username.trim() || "The account";
+      setActionNotice({
+        title: "User created",
+        message: `${label} has been created and is awaiting approval before they can sign in.`,
+      });
       setEmail("");
       setUsername("");
       setPassword("");
-      void usersQuery.refetch();
+      const result = await usersQuery.refetch();
+      const created = result.data?.find((row) => row.email?.trim().toLowerCase() === createdEmail);
+      if (created) {
+        setHighlightedUserId(created.id);
+        window.setTimeout(() => {
+          setHighlightedUserId((current) => (current === created.id ? null : current));
+        }, 3000);
+      }
     },
   });
 
@@ -253,6 +286,7 @@ export function AdminUsersPanel() {
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             autoComplete="new-password"
+            placeholder="Password"
             required
             style={{ ...inputStyle, paddingRight: 40 }}
             onFocus={onInputFocus}
@@ -284,10 +318,32 @@ export function AdminUsersPanel() {
             )}
           </button>
         </div>
-        <p style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.5 }}>
-          Password must be at least 8 characters and include one uppercase letter, one lowercase letter, one number, and
-          a special character (e.g. *&amp;!).
-        </p>
+        <ul
+          aria-label="Password requirements"
+          aria-live="polite"
+          style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "row", flexWrap: "wrap", columnGap: 14, rowGap: 6 }}
+        >
+          {CREATE_USER_PW_RULES.map(({ key, label }) => {
+            const ok = createUserPasswordChecks(password)[key];
+            return (
+              <li key={key} style={{
+                display: "flex", alignItems: "center", gap: 6,
+                fontFamily: fontBody, fontSize: 11.5, whiteSpace: "nowrap",
+                color: ok ? C.green : C.muted,
+                transition: "color 200ms",
+              }}>
+                <span style={{
+                  fontSize: 11, lineHeight: 1,
+                  color: ok ? C.gold : "#ccc",
+                  transition: "color 200ms", flexShrink: 0,
+                }}>
+                  {ok ? "✓" : "○"}
+                </span>
+                {label}
+              </li>
+            );
+          })}
+        </ul>
 
         <button
           disabled={createUserMutation.isPending}
@@ -308,9 +364,6 @@ export function AdminUsersPanel() {
         </button>
       </form>
 
-      {createUserMutation.isSuccess && (
-        <p style={{ fontSize: 12.5, color: C.green, marginBottom: 8 }}>User created successfully.</p>
-      )}
       {createUserMutation.error && (
         <p style={{ fontSize: 12.5, color: C.red, marginBottom: 8 }}>{createUserErrorMessage}</p>
       )}
@@ -378,12 +431,22 @@ export function AdminUsersPanel() {
                 </tr>
               </thead>
               <tbody>
-                {displayedUsers.map((listedUser) => (
+                {displayedUsers.map((listedUser) => {
+                  const isHighlighted = listedUser.id === highlightedUserId;
+                  return (
                   <tr
                     key={listedUser.id}
-                    style={{ borderBottom: `1px solid #f0e8d8` }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "rgba(201,124,42,0.04)"; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "transparent"; }}
+                    style={{
+                      borderBottom: `1px solid #f0e8d8`,
+                      background: isHighlighted ? "rgba(201,124,42,0.16)" : "transparent",
+                      transition: "background 900ms ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isHighlighted) (e.currentTarget as HTMLTableRowElement).style.background = "rgba(201,124,42,0.04)";
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLTableRowElement).style.background = isHighlighted ? "rgba(201,124,42,0.16)" : "transparent";
+                    }}
                   >
                     <td style={{ padding: "9px 10px", color: C.navy }}>{listedUser.email || "-"}</td>
                     <td style={{ padding: "9px 10px", color: C.navy }}>{listedUser.username?.trim() || "-"}</td>
@@ -501,7 +564,8 @@ export function AdminUsersPanel() {
                       </button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
