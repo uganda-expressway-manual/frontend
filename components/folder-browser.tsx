@@ -10,7 +10,7 @@ import { isAdminUser } from "@/lib/auth-user";
 import { api } from "@/lib/api";
 import { DocumentChatWidget } from "@/components/document-chat-widget";
 import { useAuth } from "@/lib/hooks/use-auth";
-import { pickRandomSpineColor, resolveShelfSpineColor } from "@/lib/folder-spine-color";
+import { LOCKED_SPINE_COLOR, pickRandomSpineColor } from "@/lib/folder-spine-color";
 import { Folder } from "@/lib/types";
 
 /* ── Design tokens (matches BookHomepage.jsx) ── */
@@ -628,7 +628,6 @@ function Shelf({
       }}>
         {folders.map((folder, idx) => {
           const absIdx = globalStartIndex + idx;
-          const color = resolveShelfSpineColor(folder);
           const isLocked = !!folder.lock && !admin;
           const isHovered = hoveredId === folder.id && !pullingId;
           const isPulling = pullingId === folder.id;
@@ -640,7 +639,6 @@ function Shelf({
           const bookEl = (
             <BookSpine
               folder={folder}
-              color={color}
               folderSealed={!!folder.lock}
               isLocked={isLocked}
               isHovered={isHovered}
@@ -703,7 +701,6 @@ const SPINE_BRAND_LABEL = "Expressway";
 ═══════════════════════════════════════════════════════════════ */
 type BookSpineProps = {
   folder: Folder;
-  color: string;
   /** Locked at folder level — sealed leather-style spine vs open paper reference */
   folderSealed: boolean;
   isLocked: boolean;
@@ -721,7 +718,7 @@ type BookSpineProps = {
 };
 
 function BookSpine({
-  folder, color, folderSealed, isLocked,
+  folder, folderSealed, isLocked,
   isHovered, isPulling, isDragged, isDragOver, fileFilterMatches,
   admin, onHoverIn, onHoverOut, onClick, onEditToggle,
 }: BookSpineProps) {
@@ -815,25 +812,28 @@ function BookSpine({
             boxShadow: shadow,
             borderRadius: 2,
             overflow: "visible",
-            transition: "box-shadow 150ms, width 200ms ease",
-            border: openReferenceSpine ? `1px solid rgba(26,39,68,0.12)` : "none",
+            transition: "box-shadow 150ms, width 200ms ease, border-color 480ms ease",
+            border: `1px solid ${openReferenceSpine ? "rgba(26,39,68,0.12)" : "rgba(0,0,0,0.18)"}`,
           }}
         >
-          {/* Sealed/locked color — wipes down from top when locking, retreats when unlocking */}
+          {/* Sealed/locked color — always the fixed LOCKED_SPINE_COLOR (#5a6570), never a
+              per-folder color, since that's the one true "this folder is locked" color. It
+              drops down from the top when locking, and lifts away upward from the bottom
+              (same color, reverse motion) when unlocking. */}
           <div
             aria-hidden
             style={{
               position: "absolute", inset: 0, borderRadius: 2,
-              background: color,
-              clipPath: openReferenceSpine ? "inset(0 0 100% 0)" : "inset(0 0 0% 0)",
-              transition: "clip-path 480ms ease",
+              background: LOCKED_SPINE_COLOR,
+              transformOrigin: "top",
+              transform: `scaleY(${openReferenceSpine ? 0 : 1})`,
+              transition: "transform 480ms ease",
             }}
           />
-          {/* Top cap */}
+          {/* Top cap — constant subtle strip, independent of lock state so it never flashes a second color */}
           <div style={{
             position: "absolute", top: 0, left: 0, right: 0, height: 16,
-            background: openReferenceSpine ? "rgba(26,39,68,0.06)" : "rgba(0,0,0,0.22)",
-            transition: "background-color 480ms ease",
+            background: "rgba(0,0,0,0.12)",
           }} />
 
           {/* Brand label — parchment stamp, navy serif (matches spine typography) */}
@@ -855,6 +855,7 @@ function BookSpine({
               borderRadius: 2,
               boxShadow:
                 "inset 0 1px 0 rgba(255,255,255,0.55), 0 1px 2px rgba(26,39,68,0.06)",
+              transition: "background-color 480ms ease",
             }}
           >
             <span
@@ -945,6 +946,7 @@ function BookSpine({
                 whiteSpace: "normal",
                 wordBreak: "break-word",
                 textAlign: "center",
+                transition: "color 480ms ease",
               }}>
                 {folder.foldername}
               </span>
@@ -958,6 +960,7 @@ function BookSpine({
             letterSpacing: "0.04em",
             textAlign: "center",
             paddingBottom: 4,
+            transition: "color 480ms ease",
           }}>
             {folder.lock ? "🔒" : `${folder.files.length} file${folder.files.length === 1 ? "" : "s"}`}
           </div>
