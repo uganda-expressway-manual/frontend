@@ -9,6 +9,19 @@
 
 </br>
 
+### Software Architecture
+
+<img width="800" alt="CICD" src="https://github.com/user-attachments/assets/e59d9417-da85-42fd-b773-88f36f95b1de" />
+
+&nbsp;&nbsp;&nbsp;The frontend and backend were each built separately on cloud-based architecture, Vercel and AWS. The frontend Next.js server runs independently on Vercel. The backend runs on a Node.js server installed on an AWS EC2 instance, acting as the central hub that connects Amazon S3 for PDF file storage and Amazon RDS (PostgreSQL) for relational database storage.
+
+&nbsp;&nbsp;&nbsp;Both frontend and backend source code are managed via GitHub, with separate CI/CD pipelines. The frontend repository is directly linked to Vercel for CI/CD. For the backend, a GitHub Actions self-hosted runner was installed on the EC2 instance — whenever changes are pushed to the backend repository, its corresponding Docker image is pulled and executed as a container on EC2.
+
+
+</br>
+
+
+
 ### Domain
 [https://uganda-expressway-manual.com/](https://uganda-expressway-manual.com)
 
@@ -17,3 +30,5 @@
 ### Reference
 - [Gemini API Documentation](https://ai.google.dev/gemini-api/docs)
 - [Gemini FileSearchStore Documentation](https://ai.google.dev/gemini-api/docs/file-search)
+- [Free DNS service - For backend](https://noip.com/)
+  
