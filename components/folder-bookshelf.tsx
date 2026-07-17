@@ -288,7 +288,7 @@ function Book3D({
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             marginBottom: 3,
           }}>
-            {file.filename}
+            {displayName}
           </p>
           <p style={{ fontFamily: fontSerif, fontSize: 11, color: C.muted }}>
             {formatDate(file.createdAt) ? `Added: ${formatDate(file.createdAt)}  ·  ` : ""}
@@ -1058,7 +1058,7 @@ export function ListView({
                   fontFamily: fontSerif, fontSize: 14, color: C.navy,
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 }}>
-                  {file.filename}
+                  {file.filename.replace(/\.pdf$/i, "")}
                 </p>
               )}
               <p style={{ fontFamily: fontSerif, fontSize: 11, color: C.muted, marginTop: 2 }}>

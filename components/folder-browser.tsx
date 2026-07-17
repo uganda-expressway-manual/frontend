@@ -1118,7 +1118,7 @@ function GlobalSearchItem({ item, keyword, returnTo }: { item: GlobalFindItem; k
     }}>
       <Link href={`/files/${item.id}`}
         style={{ fontFamily: fontSerif, fontSize: 15, fontWeight: 600, color: C.navy, textDecoration: "none" }}>
-        {item.filename}
+        {item.filename.replace(/\.pdf$/i, "")}
       </Link>
       {pagedEntries.length > 0 && (
         <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>

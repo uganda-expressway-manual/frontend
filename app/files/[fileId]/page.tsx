@@ -443,10 +443,13 @@ export default function FileViewerPage() {
     };
   }, []);
 
+  /** Full filename with extension — used for the actual download, which needs a real `.pdf` name. */
   const displayFilename = useMemo(
     () => fileQuery.data?.filename?.trim() || `file-${fileId}.pdf`,
     [fileQuery.data?.filename, fileId]
   );
+  /** Same name without the `.pdf` tail, for on-screen display only. */
+  const displayTitle = useMemo(() => displayFilename.replace(/\.pdf$/i, ""), [displayFilename]);
 
   const highlights = useMemo<HighlightItem[]>(() => highlightsQuery.data ?? [], [highlightsQuery.data]);
   const notes = useMemo<NoteItem[]>(() => notesQuery.data ?? [], [notesQuery.data]);
@@ -562,7 +565,7 @@ export default function FileViewerPage() {
           fileMetadataLoaded
           pdfBytesFetched={false}
           overallPercent={fileMetadataOverallPercent ?? 99}
-          filename={fileQuery.data?.filename}
+          filename={fileQuery.data?.filename ? displayTitle : undefined}
         />
       </section>
     );
@@ -949,7 +952,7 @@ export default function FileViewerPage() {
                   </button>
                 )}
               </div>
-              <h1 className="truncate break-keep text-base font-semibold text-slate-900 sm:text-lg">{displayFilename}</h1>
+              <h1 className="truncate break-keep text-base font-semibold text-slate-900 sm:text-lg">{displayTitle}</h1>
             </div>
             <div className="flex items-center gap-2">
               <button

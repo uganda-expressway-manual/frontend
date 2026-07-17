@@ -361,16 +361,23 @@ export function PDFViewer({
     }
   }, [MIN_ZOOM, isSinglePageFullscreen]);
 
+  /**
+   * Always enter fullscreen at a clean 100%/top-left state, regardless of whatever zoom or pan
+   * was active beforehand. Previously this only *clamped* the prior `pinchZoomScale` into the
+   * fullscreen preset range, so a zoom level (or pan offset, since `viewportRef` is the same DOM
+   * node in both modes) carried straight over — that's what made fullscreen appear to crop or
+   * shrink the page depending on the zoom ratio set before pressing fullscreen.
+   */
   useEffect(() => {
     if (!isFullscreen) {
       return;
     }
-    setPinchZoomScale((s) => {
-      const lo = FULLSCREEN_ZOOM_SCALES[0];
-      const hi = previewMode ? MIN_ZOOM : FULLSCREEN_ZOOM_SCALES[FULLSCREEN_ZOOM_SCALES.length - 1];
-      return snapScaleToFullscreenPreset(clampNumber(s, lo, hi));
-    });
-  }, [isFullscreen, previewMode]);
+    setPinchZoomScale(MIN_ZOOM);
+    pinchStartDistanceRef.current = null;
+    pinchStartScaleRef.current = MIN_ZOOM;
+    isPinchingRef.current = false;
+    viewportRef.current?.scrollTo({ left: 0, top: 0, behavior: "auto" });
+  }, [isFullscreen, MIN_ZOOM]);
 
   useEffect(() => {
     if (!previewMode) {
@@ -1870,9 +1877,18 @@ function clampNumber(value: number, min: number, max: number): number {
 }
 
 /**
- * Fullscreen + browser page zoom: nested flex can report a tiny `getBoundingClientRect()` on the book viewport
- * while `window.innerWidth` / VisualViewport still reflect the real layout viewport. Take the max so PDF fit math
- * uses the full screen (CSS px — stable across browser zoom).
+ * Fullscreen + browser page zoom: nested flex can (rarely) report a near-zero
+ * `getBoundingClientRect()` on the book viewport while `window.innerWidth`/VisualViewport still
+ * reflect the real layout viewport — that's the only case where the window/visualViewport
+ * fallback below should apply.
+ *
+ * Previously this unconditionally took `Math.max(rect, window.inner*, visualViewport)`, which
+ * backfired under several browser zoom levels: `window.innerHeight` can read *larger* than the
+ * book viewport element's true on-screen height (rounding/DPI artifacts differ between the two
+ * APIs at non-100% zoom), so the "fit" math sized pages taller than the actual visible area and
+ * the bottom of every page — including the page number — rendered off-screen. The element's own
+ * rect is the authoritative measurement of the space it actually has to render into once it's a
+ * plausible size, so it should win outright rather than be overridden by a larger window reading.
  */
 function getFullscreenPdfAvailSizePx(rect: DOMRectReadOnly): { width: number; height: number } {
   let w = rect.width;
@@ -1880,15 +1896,18 @@ function getFullscreenPdfAvailSizePx(rect: DOMRectReadOnly): { width: number; he
   if (typeof window === "undefined") {
     return { width: Math.max(1, Math.round(w)), height: Math.max(1, Math.round(h)) };
   }
-  const docEl = document.documentElement;
-  const layoutW = Math.max(window.innerWidth, docEl.clientWidth);
-  const layoutH = Math.max(window.innerHeight, docEl.clientHeight);
-  w = Math.max(w, layoutW);
-  h = Math.max(h, layoutH);
-  const vv = window.visualViewport;
-  if (vv) {
-    w = Math.max(w, vv.width);
-    h = Math.max(h, vv.height);
+  const MIN_PLAUSIBLE_PX = 100;
+  if (w < MIN_PLAUSIBLE_PX || h < MIN_PLAUSIBLE_PX) {
+    const docEl = document.documentElement;
+    const layoutW = Math.max(window.innerWidth, docEl.clientWidth);
+    const layoutH = Math.max(window.innerHeight, docEl.clientHeight);
+    w = Math.max(w, layoutW);
+    h = Math.max(h, layoutH);
+    const vv = window.visualViewport;
+    if (vv) {
+      w = Math.max(w, vv.width);
+      h = Math.max(h, vv.height);
+    }
   }
   return {
     width: Math.max(1, Math.round(w)),

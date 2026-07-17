@@ -792,7 +792,7 @@ export default function FolderPage() {
               fontFamily: fontSerif, fontSize: 13, color: C.textMid,
               marginTop: 10, lineHeight: 1.5, wordBreak: "break-word",
             }}>
-              <strong>{filePendingDelete?.filename}</strong> will be removed from this folder. This cannot be undone.
+              <strong>{filePendingDelete?.filename?.replace(/\.pdf$/i, "")}</strong> will be removed from this folder. This cannot be undone.
             </p>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 22 }}>
               <button
@@ -1161,7 +1161,7 @@ function FolderSearchItem({ item, keyword, returnTo }: { item: FileVersionItem; 
         onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
         onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
       >
-        {item.filename}
+        {item.filename.replace(/\.pdf$/i, "")}
       </Link>
       {pagedEntries.length > 0 && (
         <div style={{ marginTop: 8 }}>

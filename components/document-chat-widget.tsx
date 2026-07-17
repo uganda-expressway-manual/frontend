@@ -2157,7 +2157,7 @@ function toReferenceLink(entry: unknown, index: number): ChatReferenceLink | nul
   const params = new URLSearchParams();
   if (pageNumber && pageNumber > 0) params.set("page", String(pageNumber));
   const href = params.toString() ? `/files/${fileIdCandidate}?${params.toString()}` : `/files/${fileIdCandidate}`;
-  const filename = typeof r.filename === "string" ? r.filename.trim() : "";
+  const filename = typeof r.filename === "string" ? r.filename.trim().replace(/\.pdf$/i, "") : "";
   const label =
     typeof r.label === "string" && r.label.trim() ? r.label :
       filename ? (pageNumber ? `${filename} - Page ${pageNumber}` : filename) :
