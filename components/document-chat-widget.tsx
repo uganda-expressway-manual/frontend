@@ -1104,7 +1104,6 @@ export function DocumentChatWidget({
               style={{
                 flex: 1,
                 background: C.paper,
-                backgroundImage: "repeating-linear-gradient(0deg,transparent,transparent 24px,rgba(180,160,120,0.06) 24px,rgba(180,160,120,0.06) 25px)",
                 padding: "20px 16px",
                 overflowY: "auto",
                 scrollBehavior: "smooth",

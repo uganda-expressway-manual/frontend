@@ -613,18 +613,14 @@ function Shelf({
 
   return (
     <div style={{ marginBottom: 40 }}>
-      {/* Wall behind books — subtle warm tone */}
+      {/* Wall behind books */}
       <div style={{
-        background: C.bg,
         borderRadius: "6px 6px 0 0",
         padding: "24px 24px 0",
         display: "flex", alignItems: "flex-end", gap: 12,
         flexWrap: "wrap",
         minHeight: 520,
         position: "relative",
-        /* vertical woodgrain */
-        backgroundImage:
-          "repeating-linear-gradient(90deg, transparent, transparent 48px, rgba(0,0,0,0.018) 48px, rgba(0,0,0,0.018) 49px)",
       }}>
         {folders.map((folder, idx) => {
           const absIdx = globalStartIndex + idx;
