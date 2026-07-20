@@ -767,10 +767,10 @@ export default function FileViewerPage() {
     >
       <div
         className={[
-          "min-w-0 max-w-full rounded-xl border p-3 shadow-sm sm:p-4",
+          "min-w-0 max-w-full",
           isFullscreen
-            ? "relative flex min-h-0 flex-1 flex-col border-0 bg-white p-0 shadow-none"
-            : "border-slate-200 bg-white",
+            ? "relative flex min-h-0 flex-1 flex-col rounded-none border-0 bg-white p-0 shadow-none"
+            : "rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4",
         ].join(" ")}
       >
         {isFullscreen ? (
@@ -1321,10 +1321,10 @@ export default function FileViewerPage() {
 
         <div
           className={[
-            "min-w-0 max-w-full overflow-x-clip rounded-xl border border-slate-200 bg-slate-100 p-2 sm:p-4",
+            "min-w-0 max-w-full overflow-x-clip",
             isFullscreen
               ? "flex min-h-0 flex-1 flex-col rounded-none border-0 bg-white p-0"
-              : "min-h-[58vh] sm:min-h-[70vh]",
+              : "min-h-[58vh] rounded-xl border border-slate-200 bg-slate-100 p-2 sm:min-h-[70vh] sm:p-4",
           ].join(" ")}
         >
           <PDFViewer

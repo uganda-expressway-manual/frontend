@@ -221,8 +221,17 @@ export function PDFViewer({
   const [hasTouchInput, setHasTouchInput] = useState(false);
   const [isStandalonePwa, setIsStandalonePwa] = useState(false);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
-  /** Page 1 viewport at scale 1 (PDF units); used so fullscreen fills width or height exactly. */
+  /** Page 1 viewport at scale 1 (PDF units); fallback aspect ratio until the currently-shown page's own viewport (below) is known. */
   const [pdfPageViewportSize, setPdfPageViewportSize] = useState<{ width: number; height: number } | null>(null);
+  /**
+   * Per-page aspect ratio (height/width at scale 1), fetched lazily for whichever pages are
+   * actually on screen. The fullscreen "contain" fit math used to assume every page shared page 1's
+   * aspect ratio — any page with a taller ratio than page 1 (mixed portrait/landscape pages, a
+   * differently-sized cover, etc.) would get sized too tall for its box and clip at the bottom.
+   */
+  const pdfDocumentRef = useRef<PDFDocumentProxy | null>(null);
+  const pageAspectRatioRequestedRef = useRef<Set<number>>(new Set());
+  const [pageAspectRatios, setPageAspectRatios] = useState<Map<number, number>>(new Map());
   /** Multiplier from VisualViewport.scale when the engine exposes it (pinch-zoom); pairs with pinchZoomScale for HUD %. */
   const [visualViewportScale, setVisualViewportScale] = useState(1);
   const flipTimerRef = useRef<number | null>(null);
@@ -283,6 +292,60 @@ export function PDFViewer({
   const bookContentWidth =
     isFullscreen && viewportWidth > 0 ? Math.max(domBookContentWidth, viewportWidth) : domBookContentWidth;
 
+  /** Lazily resolves and caches a page's true aspect ratio, once, the first time it's actually needed. */
+  const ensurePageAspectRatio = useCallback((pageNumber: number | null) => {
+    if (!pageNumber || pageNumber < 1 || pageAspectRatioRequestedRef.current.has(pageNumber)) {
+      return;
+    }
+    const pdf = pdfDocumentRef.current;
+    if (!pdf) {
+      return;
+    }
+    pageAspectRatioRequestedRef.current.add(pageNumber);
+    pdf
+      .getPage(pageNumber)
+      .then((page) => {
+        const viewport = page.getViewport({ scale: 1 });
+        setPageAspectRatios((prev) => {
+          const next = new Map(prev);
+          next.set(pageNumber, viewport.height / viewport.width);
+          return next;
+        });
+      })
+      .catch(() => {
+        pageAspectRatioRequestedRef.current.delete(pageNumber);
+      });
+  }, []);
+
+  useEffect(() => {
+    ensurePageAspectRatio(leftPage);
+    ensurePageAspectRatio(rightPage);
+  }, [ensurePageAspectRatio, leftPage, rightPage, numPages]);
+
+  /**
+   * The taller of the currently-visible page(s)' own aspect ratios — falls back to page 1's until
+   * resolved. Using a single global ratio (page 1's, forever) here is what let any page with a
+   * different aspect ratio than page 1 get sized too tall for its box and clip at the bottom.
+   */
+  const currentPageAspectRatio = (() => {
+    let maxRatio = 0;
+    for (const n of [leftPage, rightPage]) {
+      if (n == null) {
+        continue;
+      }
+      const ratio = pageAspectRatios.get(n);
+      if (ratio && ratio > maxRatio) {
+        maxRatio = ratio;
+      }
+    }
+    if (maxRatio > 0) {
+      return maxRatio;
+    }
+    return pdfPageViewportSize
+      ? pdfPageViewportSize.height / pdfPageViewportSize.width
+      : FULLSCREEN_FALLBACK_PDF_HEIGHT_OVER_WIDTH;
+  })();
+
   const pageWidth = useMemo(() => {
     /**
      * Fullscreen: fit width is computed at 100% zoom only; magnification is applied solely via
@@ -292,8 +355,8 @@ export function PDFViewer({
     const zFit = isFullscreen ? MIN_ZOOM : Math.max(pinchZoomScale, 0.01);
     const fullscreenPdfLaneHeight =
       isFullscreen && viewportHeight > 0 ? Math.max(0, viewportHeight - FULLSCREEN_LAYOUT_EPSILON_PX) : 0;
-    const pdfVw = pdfPageViewportSize?.width ?? 1;
-    const pdfVh = pdfPageViewportSize?.height ?? FULLSCREEN_FALLBACK_PDF_HEIGHT_OVER_WIDTH;
+    const pdfVw = 1;
+    const pdfVh = currentPageAspectRatio;
 
     if (bookContentWidth <= 0) {
       return BOOK_PAGE_MAX_WIDTH;
@@ -346,7 +409,7 @@ export function PDFViewer({
     isFullscreen,
     pinchZoomScale,
     viewportHeight,
-    pdfPageViewportSize,
+    currentPageAspectRatio,
   ]);
   const pageHeight = shouldFitToFullscreenHeight
     ? clampNumber(Math.floor(Math.max(0, viewportHeight - FULLSCREEN_LAYOUT_EPSILON_PX)), 240, 2600)
@@ -400,6 +463,9 @@ export function PDFViewer({
   useEffect(() => {
     setPinchZoomScale(MIN_ZOOM);
     setPdfPageViewportSize(null);
+    pdfDocumentRef.current = null;
+    pageAspectRatioRequestedRef.current = new Set();
+    setPageAspectRatios(new Map());
   }, [MIN_ZOOM, fileUrl]);
 
   useEffect(() => {
@@ -962,6 +1028,7 @@ export function PDFViewer({
         }));
       }}
       onLoadSuccess={async (pdf: PDFDocumentProxy) => {
+        pdfDocumentRef.current = pdf;
         const pages = pdf.numPages;
         setNumPages(pages);
         onNumPagesChange?.(pages);
@@ -1247,13 +1314,20 @@ export function PDFViewer({
             fullscreenSpreadCombinedZoom
               ? "flex w-max max-w-none flex-1 flex-row flex-nowrap items-start gap-0 overflow-visible"
               : [
-                  "min-w-0 grid w-full max-w-full grid-cols-1 gap-3 lg:grid-cols-2 lg:grid-rows-1",
+                  "min-w-0 grid w-full max-w-full grid-cols-1 lg:grid-cols-2 lg:grid-rows-1",
                   isFullscreen && pinchZoomScale > MIN_ZOOM ? "min-h-0 overflow-visible" : "overflow-hidden",
-                  isFullscreen ? "min-h-0 flex-1 gap-0 lg:auto-rows-fr" : "",
+                  isFullscreen ? "min-h-0 flex-1 gap-0 lg:auto-rows-fr" : "gap-3",
                 ].join(" "),
           ].join(" ")}
         >
           <BookPage
+            /**
+             * Desktop spread only: keying by page number remounts the card on every flip, which
+             * restarts the fade-in below instead of the new page's content just snapping into
+             * place the instant the flip timer commits. Mobile keeps a stable key — its own
+             * slide transition (`mobileIncomingPage`) already handles that page turn smoothly.
+             */
+            key={isSinglePageView ? "book-left" : `book-left-${leftPage}`}
             fullscreenSpreadStrip={fullscreenSpreadCombinedZoom}
             pageNumber={leftPage}
             isBookmarked={bookmarkedSet.has(leftPage)}
@@ -1278,6 +1352,7 @@ export function PDFViewer({
           />
           {rightPage ? (
             <BookPage
+              key={`book-right-${rightPage}`}
               fullscreenSpreadStrip={fullscreenSpreadCombinedZoom}
               pageNumber={rightPage}
               isBookmarked={bookmarkedSet.has(rightPage)}
@@ -1394,6 +1469,15 @@ export function PDFViewer({
       )}
 
       <style jsx global>{`
+        @keyframes pageContentFadeIn {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+
         @keyframes bookFlipNext {
           0% {
             transform: perspective(1800px) rotateY(0deg);
@@ -1652,13 +1736,14 @@ function BookPage({
   return (
     <div
       className={[
-        "group relative flex min-w-0 max-w-full flex-col rounded-xl border border-slate-200 p-2 shadow-sm transition hover:shadow-md",
+        "group relative flex min-w-0 max-w-full flex-col transition hover:shadow-md",
+        !isMobileView ? "animate-[pageContentFadeIn_650ms_ease-out]" : "",
         isFullscreen && isZoomed ? "overflow-visible" : "overflow-hidden",
         isFullscreen
           ? fullscreenSpreadStrip
             ? "h-full min-h-0 w-auto shrink-0 max-w-none rounded-none border-0 p-0 shadow-none"
             : "h-full min-h-0 w-full max-w-full rounded-none border-0 p-0 shadow-none"
-          : "",
+          : "rounded-xl border border-slate-200 p-2 shadow-sm",
         isFullscreen && isZoomed
           ? "cursor-grab active:cursor-grabbing"
           : isZoomed && isMobileView
@@ -1721,7 +1806,8 @@ function BookPage({
       )}
       <div
         className={[
-          "relative flex items-start rounded-md border border-slate-200",
+          "relative flex items-start",
+          isFullscreen ? "" : "rounded-md border border-slate-200",
           /* Centered layout looks nicer at 1×; when zoomed, centering overflows left of the scroll
            origin so scrollLeft≥0 cannot reveal it — align start so overflow is pan-scrollable. */
           isFullscreen && isZoomed ? "justify-start" : "justify-center",
