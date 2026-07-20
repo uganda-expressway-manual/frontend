@@ -21,14 +21,18 @@ const C = {
 };
 
 /** Keeps a panel mounted through its fade-out so closing animates instead of vanishing instantly. */
-function useFadeMount(visible: boolean, durationMs = 160): { mounted: boolean; entered: boolean } {
+function useFadeMount(visible: boolean, durationMs = 220): { mounted: boolean; entered: boolean } {
   const [mounted, setMounted] = useState(visible);
   const [entered, setEntered] = useState(visible);
   useEffect(() => {
     if (visible) {
       setMounted(true);
-      const raf = requestAnimationFrame(() => setEntered(true));
-      return () => cancelAnimationFrame(raf);
+      // Double rAF: guarantees the browser paints the closed (opacity:0) state
+      // on one frame before flipping to entered on the next, so the transition
+      // never gets coalesced away into an instant "pop".
+      let raf2 = 0;
+      const raf1 = requestAnimationFrame(() => { raf2 = requestAnimationFrame(() => setEntered(true)); });
+      return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); };
     }
     setEntered(false);
     const t = window.setTimeout(() => setMounted(false), durationMs);
@@ -140,9 +144,10 @@ export function Navbar() {
                 borderRadius: 6, minWidth: 192,
                 boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
                 zIndex: 100, overflow: "hidden",
+                transformOrigin: "top",
                 opacity: dropdownFade.entered ? 1 : 0,
-                transform: dropdownFade.entered ? "translateY(0)" : "translateY(-6px)",
-                transition: "opacity 160ms ease, transform 160ms ease",
+                transform: dropdownFade.entered ? "translateY(0) scaleY(1)" : "translateY(-14px) scaleY(0.96)",
+                transition: "opacity 240ms cubic-bezier(0.16, 1, 0.3, 1), transform 240ms cubic-bezier(0.16, 1, 0.3, 1)",
                 pointerEvents: dropdownFade.entered ? "auto" : "none",
               }}>
                 {/* User info header */}

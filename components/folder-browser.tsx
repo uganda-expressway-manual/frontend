@@ -30,6 +30,8 @@ const BOOKS_PER_SHELF = 5;
 const PAGE_CHUNK_SIZE = 5;
 /** Pick-up + open exit animation before navigating into a folder (see BookSpine `transform`/`opacity`). */
 const FOLDER_OPEN_MS = 420;
+/** Per-letter delay for the spine title reveal — shared by rename and create so both animate at the same pace. */
+const LETTER_MORPH_STEP_MS = 140;
 
 /** Same idea as folder interior: dim spines that do not match the search string (folder name or any PDF filename). */
 function folderMatchesFileNameFilter(folder: Folder, query: string): boolean {
@@ -50,20 +52,61 @@ interface GlobalFindItem {
 ═══════════════════════════════════════════════════════════════ */
 
 /** Keeps a panel mounted through its fade-out so closing animates instead of vanishing instantly. */
-function useFadeMount(visible: boolean, durationMs = 180): { mounted: boolean; entered: boolean } {
+function useFadeMount(visible: boolean, durationMs = 220): { mounted: boolean; entered: boolean } {
   const [mounted, setMounted] = useState(visible);
   const [entered, setEntered] = useState(visible);
   useEffect(() => {
     if (visible) {
       setMounted(true);
-      const raf = requestAnimationFrame(() => setEntered(true));
-      return () => cancelAnimationFrame(raf);
+      // Double rAF: guarantees the browser paints the closed (opacity:0) state
+      // on one frame before flipping to entered on the next, so the transition
+      // never gets coalesced away into an instant "pop".
+      let raf2 = 0;
+      const raf1 = requestAnimationFrame(() => { raf2 = requestAnimationFrame(() => setEntered(true)); });
+      return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); };
     }
     setEntered(false);
     const t = window.setTimeout(() => setMounted(false), durationMs);
     return () => window.clearTimeout(t);
   }, [visible, durationMs]);
   return { mounted, entered };
+}
+
+/** Cycles "." → ".." → "..." while `active`, so a pending label reads as ongoing progress. */
+function useLoadingDots(active: boolean, intervalMs = 400): string {
+  const [count, setCount] = useState(1);
+  useEffect(() => {
+    if (!active) { setCount(1); return; }
+    const id = window.setInterval(() => setCount(c => (c % 3) + 1), intervalMs);
+    return () => window.clearInterval(id);
+  }, [active, intervalMs]);
+  return active ? ".".repeat(count) : "";
+}
+
+/** Reveals a changed name left-to-right, one letter at a time, instead of snapping to the new text instantly. */
+function useLetterMorph(target: string, stepMs = LETTER_MORPH_STEP_MS, initial: string = target): string {
+  const [display, setDisplay] = useState(initial);
+  const prevRef = useRef(initial);
+  useEffect(() => {
+    if (target === prevRef.current) return;
+    const from = prevRef.current;
+    const steps = Math.max(from.length, target.length);
+    let i = 0;
+    const id = window.setInterval(() => {
+      i += 1;
+      setDisplay(target.slice(0, i) + from.slice(i));
+      if (i >= steps) {
+        window.clearInterval(id);
+        // Only mark "seen" once the reveal actually finishes — if this effect gets torn
+        // down early (e.g. React Strict Mode's dev-only double-invoke on mount), prevRef
+        // stays stale so the retry effect still detects the change and replays it, instead
+        // of silently skipping the animation.
+        prevRef.current = target;
+      }
+    }, stepMs);
+    return () => window.clearInterval(id);
+  }, [target, stepMs]);
+  return display;
 }
 
 /** Shared backdrop + dialog wrapper: fades in on open, fades out on close instead of snapping. */
@@ -121,6 +164,7 @@ export function FolderBrowser() {
   const [newFolderLock, setNewFolderLock] = useState(false);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const createFolderFade = useFadeMount(showCreateFolder);
+  const [justCreatedFolderId, setJustCreatedFolderId] = useState<string | null>(null);
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   const [folderNameDraft, setFolderNameDraft] = useState("");
   const [folderLockDraft, setFolderLockDraft] = useState(false);
@@ -148,12 +192,24 @@ export function FolderBrowser() {
 
   const createFolderMutation = useMutation({
     mutationFn: async ({ foldername, lock, order }: { foldername: string; lock: boolean; order: number }) =>
-      api.post("/folders", { foldername, lock, order, spineColor: pickRandomSpineColor() }),
-    onSuccess: () => {
+      api.post<Folder>("/folders", { foldername, lock, order, spineColor: pickRandomSpineColor() }),
+    onSuccess: async (_res, variables) => {
+      // Don't trust the POST response's shape for the new id (several endpoints in this
+      // backend wrap results differently) — diff the refetched list instead to find it.
+      const previousIds = new Set((foldersQuery.data ?? []).map((f) => f.id));
       setNewFolderName(""); setNewFolderLock(false);
-      queryClient.invalidateQueries({ queryKey: ["folders"] });
+      await queryClient.invalidateQueries({ queryKey: ["folders"] });
+      const fresh = queryClient.getQueryData<Folder[]>(["folders"]) ?? [];
+      const created =
+        fresh.find((f) => !previousIds.has(f.id) && f.foldername === variables.foldername) ??
+        fresh.find((f) => !previousIds.has(f.id));
+      if (created) {
+        setJustCreatedFolderId(created.id);
+        window.setTimeout(() => setJustCreatedFolderId((id) => (id === created.id ? null : id)), 3000);
+      }
     },
   });
+  const creatingDots = useLoadingDots(createFolderMutation.isPending);
   const renameFolderMutation = useMutation({
     mutationFn: async ({ folderId, foldername, lock }: { folderId: string; foldername: string; lock: boolean }) =>
       api.patch(`/folders/${folderId}`, { foldername, lock }),
@@ -234,7 +290,7 @@ export function FolderBrowser() {
         background: C.paper, border: `1px solid ${C.border}`,
         borderRadius: 6, padding: "16px 20px", marginBottom: 28,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, position: "relative" }}>
           {/* Search input */}
           <div style={{ position: "relative", flex: 1 }}>
             <span style={{
@@ -295,18 +351,22 @@ export function FolderBrowser() {
               + New Folder
             </button>
           )}
-        </div>
 
-        {/* Create folder panel */}
-        {admin && createFolderFade.mounted && (
-          <div style={{
-            marginTop: 14, padding: "14px 16px",
-            background: "#f0ebe0", border: `1px solid ${C.border}`,
-            borderRadius: 4,
-            opacity: createFolderFade.entered ? 1 : 0,
-            transform: createFolderFade.entered ? "translateY(0)" : "translateY(-6px)",
-            transition: "opacity 180ms ease, transform 180ms ease",
-          }}>
+          {/* Create folder panel — absolutely positioned so it overlaps the content below instead of pushing it down */}
+          {admin && createFolderFade.mounted && (
+            <div style={{
+              position: "absolute", top: "calc(100% + 10px)", left: 0, right: 0,
+              padding: "14px 16px",
+              background: "#f0ebe0", border: `1px solid ${C.border}`,
+              borderRadius: 4,
+              boxShadow: "0 16px 40px rgba(0,0,0,0.18)",
+              zIndex: 60,
+              transformOrigin: "top",
+              opacity: createFolderFade.entered ? 1 : 0,
+              transform: createFolderFade.entered ? "translateY(0) scaleY(1)" : "translateY(-14px) scaleY(0.96)",
+              transition: "opacity 240ms cubic-bezier(0.16, 1, 0.3, 1), transform 240ms cubic-bezier(0.16, 1, 0.3, 1)",
+              pointerEvents: createFolderFade.entered ? "auto" : "none",
+            }}>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
               <input
                 value={newFolderName}
@@ -345,11 +405,12 @@ export function FolderBrowser() {
                   transition: "opacity 150ms",
                 }}
               >
-                {createFolderMutation.isPending ? "Creating…" : "Create"}
+                {createFolderMutation.isPending ? `Creating${creatingDots}` : "Create"}
               </button>
             </div>
           </div>
-        )}
+          )}
+        </div>
 
         {/* Search results */}
         {globalSearchQuery.isLoading && (
@@ -390,6 +451,7 @@ export function FolderBrowser() {
           shelfIndex={shelfIndex}
           fileNameFilter={globalSearch}
           admin={admin}
+          justCreatedFolderId={justCreatedFolderId}
           draggedFolderId={draggedFolderId}
           dragOverFolderId={dragOverFolderId}
           onOpenLocked={setLockedModal}
@@ -581,6 +643,8 @@ type ShelfProps = {
   /** When non-empty, spines that do not match folder name or any file name are dimmed (see folder interior). */
   fileNameFilter: string;
   admin: boolean;
+  /** Freshly-created folder's id — its spine title reveals letter-by-letter instead of appearing all at once. */
+  justCreatedFolderId: string | null;
   draggedFolderId: string | null;
   dragOverFolderId: string | null;
   onOpenLocked: (id: string) => void;
@@ -594,7 +658,7 @@ type ShelfProps = {
 };
 
 function Shelf({
-  folders, shelfIndex, globalStartIndex, fileNameFilter, admin,
+  folders, shelfIndex, globalStartIndex, fileNameFilter, admin, justCreatedFolderId,
   draggedFolderId, dragOverFolderId,
   onOpenLocked, onEditToggle,
   onDragStart, onDrag, onDragEnd, onDragOver, onDragLeave, onDrop,
@@ -643,6 +707,7 @@ function Shelf({
               isDragOver={isDragOver}
               fileFilterMatches={fileFilterMatches}
               admin={admin}
+              revealFromEmpty={folder.id === justCreatedFolderId}
               onHoverIn={() => setHoveredId(folder.id)}
               onHoverOut={() => setHoveredId(null)}
               onClick={() => handleBookClick(folder)}
@@ -707,6 +772,8 @@ type BookSpineProps = {
   /** False when the dashboard search box is non-empty and this folder/name does not match. */
   fileFilterMatches: boolean;
   admin: boolean;
+  /** True only for the folder that was just created — its title reveals letter-by-letter from empty on mount. */
+  revealFromEmpty: boolean;
   onHoverIn: () => void;
   onHoverOut: () => void;
   onClick: () => void;
@@ -716,7 +783,7 @@ type BookSpineProps = {
 function BookSpine({
   folder, folderSealed, isLocked,
   isHovered, isPulling, isDragged, isDragOver, fileFilterMatches,
-  admin, onHoverIn, onHoverOut, onClick, onEditToggle,
+  admin, revealFromEmpty, onHoverIn, onHoverOut, onClick, onEditToggle,
 }: BookSpineProps) {
   /* Detect touch device to replace hover→tap scale */
   const [isTouch, setIsTouch] = useState(false);
@@ -725,6 +792,7 @@ function BookSpine({
 
   useEffect(() => { setIsTouch(window.matchMedia("(hover: none)").matches); }, []);
 
+  const displayedTitle = useLetterMorph(folder.foldername, LETTER_MORPH_STEP_MS, revealFromEmpty ? "" : undefined);
   const titleFontSize = folder.foldername.length > 20 ? 20 : 24;
   const titleMaxAlong = BOOK_SPINE_H - BOOK_SPINE_TITLE_PAD;
 
@@ -944,7 +1012,7 @@ function BookSpine({
                 textAlign: "center",
                 transition: "color 480ms ease",
               }}>
-                {folder.foldername}
+                {displayedTitle}
               </span>
             </div>
           </div>
@@ -1025,6 +1093,7 @@ function EditPanel({
   onSave: () => void; onCancel: () => void; onRequestDelete: () => void;
   renamePending: boolean; deletePending: boolean;
 }) {
+  const savingDots = useLoadingDots(renamePending);
   return (
     <div style={{
       padding: "14px",
@@ -1063,7 +1132,7 @@ function EditPanel({
               background: C.navy, border: "none", borderRadius: 3, cursor: "pointer",
               opacity: !nameDraft.trim() ? 0.5 : 1,
             }}>
-            {renamePending ? "Saving…" : "Save"}
+            {renamePending ? `Saving${savingDots}` : "Save"}
           </button>
           <button type="button" onClick={onCancel}
             style={{
