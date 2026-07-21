@@ -795,6 +795,27 @@ export async function postFolderQuery(folderId: string, payload: FolderQueryPayl
   return data;
 }
 
+export type FolderQueryAllPayload = {
+  chatId: string;
+  text: string;
+  folderIds: string[];
+};
+
+/**
+ * POST `/folders/:folderId/query/all` — RAG Q&A grounded across every folder in `folderIds`
+ * (dashboard-level chat, not scoped to a single folder). The `:folderId` path param is required
+ * by the route but unused by the handler, which reads `folderIds` from the body instead — the
+ * first id in the list is used to satisfy it.
+ */
+export async function postFolderQueryAll(payload: FolderQueryAllPayload): Promise<unknown> {
+  const routeFolderId = payload.folderIds[0] ?? "";
+  const { data } = await api.post<unknown>(
+    `/folders/${encodeURIComponent(routeFolderId)}/query/all`,
+    payload,
+  );
+  return data;
+}
+
 /** PATCH `/chat/:chatId/message/:messageId` — edit a user message. */
 export async function patchChatMessage(
   chatId: string,

@@ -15,6 +15,7 @@ import {
   patchChatMessage,
   postChatbotMessage,
   postFolderQuery,
+  postFolderQueryAll,
   updateChat,
   updateChatbotModel,
   type ChatModelOption,
@@ -50,6 +51,8 @@ interface ChatReferenceLink {
 
 interface DocumentChatWidgetProps {
   folderId?: string;
+  /** Dashboard-level chat: when provided (2+ folders), queries hit `/folders/:folderId/query/all` across all of them instead of the single-folder endpoint. */
+  folderIds?: string[];
   stackZClass?: string;
   layout?: "default" | "reader";
   readerFullscreen?: boolean;
@@ -92,6 +95,7 @@ function BookIcon({ size = 20, color = C.gold }: { size?: number; color?: string
 
 export function DocumentChatWidget({
   folderId = "",
+  folderIds,
   stackZClass = "z-40",
   layout = "default",
   contextLabel,
@@ -499,11 +503,15 @@ export function DocumentChatWidget({
       chatId: string;
       pendingUserMessageId: string;
     }) => {
-      // Folder-scoped chats are grounded in that folder's PDFs via the RAG file-search endpoint;
-      // the general chatbot endpoint is used everywhere else (no folder context).
-      const data = folderId
-        ? await postFolderQuery(folderId, { chatId, text })
-        : await postChatbotMessage({ chatId, text });
+      // Dashboard chat (multiple folders) is grounded across all of them via `/query/all`;
+      // a single folder/file context uses the folder-scoped RAG endpoint; otherwise fall back
+      // to the general chatbot endpoint (no folder context).
+      const data =
+        folderIds && folderIds.length > 0
+          ? await postFolderQueryAll({ chatId, text, folderIds })
+          : folderId
+            ? await postFolderQuery(folderId, { chatId, text })
+            : await postChatbotMessage({ chatId, text });
       return {
         ...resolveChatbotResponse(data),
         requestId,

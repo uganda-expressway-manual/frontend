@@ -628,7 +628,7 @@ export function FolderBrowser() {
         </div>
       </FadeOverlay>
 
-      <DocumentChatWidget />
+      <DocumentChatWidget folderIds={orderedFolders.map((f) => f.id)} />
     </section>
   );
 }
