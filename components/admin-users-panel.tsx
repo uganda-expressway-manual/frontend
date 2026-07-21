@@ -483,7 +483,6 @@ export function AdminUsersPanel() {
                       >
                         <option value="USER">USER</option>
                         <option value="VIEWER">VIEWER</option>
-                        <option value="ADMIN">ADMIN</option>
                       </select>
                     </td>
                     <td style={{ padding: "9px 10px" }}>
