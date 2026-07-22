@@ -20,7 +20,6 @@ import {
   getHighlights,
   getNotes,
   getPdfViewerPresignedUrl,
-  updateHighlightColor,
   updateNote,
 } from "@/lib/api";
 import { triggerDirectDownload } from "@/lib/pdf-download";
@@ -46,57 +45,16 @@ const PDFViewer = dynamic(() => import("@/components/pdf-viewer").then((mod) => 
 });
 
 type BookmarkColorId = "silver" | "sand" | "ice" | "sage";
-type PageToneId = "white" | "ivory" | "mist";
-type CoverToneId = "slate" | "stone" | "forest";
-type HighlightColorId = "yellow" | "green" | "blue" | "pink";
 type PopoverPanelId = "bookmark" | "highlights" | "notes" | "settings" | null;
 
-interface HighlightColorOption {
-  id: HighlightColorId;
-  label: string;
-  /** Visible CSS color used both in the picker swatch and on the rendered text-layer mark. */
-  swatch: string;
-}
-
-const HIGHLIGHT_COLOR_OPTIONS: HighlightColorOption[] = [
-  { id: "yellow", label: "Yellow", swatch: "#fde68a" },
-  { id: "green", label: "Mint", swatch: "#bbf7d0" },
-  { id: "blue", label: "Sky", swatch: "#bfdbfe" },
-  { id: "pink", label: "Pink", swatch: "#fbcfe8" },
-];
-
-function resolveHighlightColorId(value: string | null | undefined): HighlightColorId {
-  if (typeof value === "string") {
-    const found = HIGHLIGHT_COLOR_OPTIONS.find((option) => option.id === value);
-    if (found) {
-      return found.id;
-    }
-  }
-  return "yellow";
-}
-
-function getHighlightSwatch(id: HighlightColorId): string {
-  const found = HIGHLIGHT_COLOR_OPTIONS.find((option) => option.id === id);
-  return found?.swatch ?? "#fde68a";
-}
+/** Fixed highlight fill color — no longer user-selectable. */
+const HIGHLIGHT_COLOR = "#fde68a";
 
 const BOOKMARK_COLOR_OPTIONS: Array<{ id: BookmarkColorId; label: string; swatch: string }> = [
   { id: "silver", label: "Silver", swatch: "#dfe1e5" },
   { id: "sand", label: "Sand", swatch: "#e8dfd2" },
   { id: "ice", label: "Ice", swatch: "#d7e4ec" },
   { id: "sage", label: "Sage", swatch: "#e2e7dc" },
-];
-
-const PAGE_TONE_OPTIONS: Array<{ id: PageToneId; label: string; swatch: string }> = [
-  { id: "white", label: "White", swatch: "#ffffff" },
-  { id: "ivory", label: "Ivory", swatch: "#f8f2e6" },
-  { id: "mist", label: "Mist", swatch: "#f2f5fb" },
-];
-
-const COVER_TONE_OPTIONS: Array<{ id: CoverToneId; label: string; swatch: string }> = [
-  { id: "slate", label: "Slate", swatch: "#e2e8f0" },
-  { id: "stone", label: "Stone", swatch: "#e7ddd2" },
-  { id: "forest", label: "Forest", swatch: "#dbe5d8" },
 ];
 
 export default function FileViewerPage() {
@@ -125,9 +83,6 @@ export default function FileViewerPage() {
   const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
   const [isPseudoFullscreen, setIsPseudoFullscreen] = useState(false);
   const [bookmarkColor, setBookmarkColor] = useState<BookmarkColorId>("silver");
-  const [pageTone, setPageTone] = useState<PageToneId>("white");
-  const [coverTone, setCoverTone] = useState<CoverToneId>("slate");
-  const [highlightColor, setHighlightColor] = useState<HighlightColorId>("yellow");
   const [hoveredPanel, setHoveredPanel] = useState<PopoverPanelId>(null);
   const [pinnedPanel, setPinnedPanel] = useState<PopoverPanelId>(null);
   const [pdfTextSelection, setPdfTextSelection] = useState<PdfTextSelection | null>(null);
@@ -258,14 +213,6 @@ export default function FileViewerPage() {
     },
   });
 
-  const updateHighlightColorMutation = useMutation({
-    mutationFn: async (input: { id: string; color: HighlightColorId }) =>
-      updateHighlightColor(input.id, input.color),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["highlights", fileId] });
-    },
-  });
-
   const deleteHighlightMutation = useMutation({
     mutationFn: async (id: string) => deleteHighlight(id),
     onSuccess: () => {
@@ -332,45 +279,6 @@ export default function FileViewerPage() {
   useEffect(() => {
     window.localStorage.setItem(getBookmarkColorStorageKey(fileId), bookmarkColor);
   }, [bookmarkColor, fileId]);
-
-  useEffect(() => {
-    const storedPageTone = window.localStorage.getItem(getPageToneStorageKey(fileId));
-    if (!storedPageTone || !isPageToneId(storedPageTone)) {
-      setPageTone("white");
-      return;
-    }
-    setPageTone(storedPageTone);
-  }, [fileId]);
-
-  useEffect(() => {
-    window.localStorage.setItem(getPageToneStorageKey(fileId), pageTone);
-  }, [fileId, pageTone]);
-
-  useEffect(() => {
-    const storedCoverTone = window.localStorage.getItem(getCoverToneStorageKey(fileId));
-    if (!storedCoverTone || !isCoverToneId(storedCoverTone)) {
-      setCoverTone("slate");
-      return;
-    }
-    setCoverTone(storedCoverTone);
-  }, [fileId]);
-
-  useEffect(() => {
-    window.localStorage.setItem(getCoverToneStorageKey(fileId), coverTone);
-  }, [coverTone, fileId]);
-
-  useEffect(() => {
-    const storedHighlightColor = window.localStorage.getItem(getHighlightColorStorageKey(fileId));
-    if (!storedHighlightColor || !isHighlightColorId(storedHighlightColor)) {
-      setHighlightColor("yellow");
-      return;
-    }
-    setHighlightColor(storedHighlightColor);
-  }, [fileId]);
-
-  useEffect(() => {
-    window.localStorage.setItem(getHighlightColorStorageKey(fileId), highlightColor);
-  }, [fileId, highlightColor]);
 
   useEffect(() => {
     const onFullscreenChange = () => {
@@ -453,14 +361,14 @@ export default function FileViewerPage() {
 
   const highlights = useMemo<HighlightItem[]>(() => highlightsQuery.data ?? [], [highlightsQuery.data]);
   const notes = useMemo<NoteItem[]>(() => notesQuery.data ?? [], [notesQuery.data]);
-  /** Project highlights into the viewer's lightweight `PdfPageHighlight` shape (resolves color id → CSS swatch). */
+  /** Project highlights into the viewer's lightweight `PdfPageHighlight` shape. */
   const projectedPageHighlights = useMemo<PdfPageHighlight[]>(
     () =>
       highlights.map((entry) => ({
         id: entry.id,
         page: entry.page,
         text: entry.text,
-        color: getHighlightSwatch(resolveHighlightColorId(entry.color)),
+        color: HIGHLIGHT_COLOR,
       })),
     [highlights]
   );
@@ -592,9 +500,8 @@ export default function FileViewerPage() {
 
   /**
    * Save the current PDF text selection as a highlight, then clear the browser selection so the
-   * floating toolbar dismisses. Color is the user's currently-selected swatch (`highlightColor`),
-   * persisted per-file in localStorage. Offsets fall back to `null` until we wire the precise
-   * page-text positions through PDF.js getTextContent in a follow-up.
+   * floating toolbar dismisses. Offsets fall back to `null` until we wire the precise page-text
+   * positions through PDF.js getTextContent in a follow-up.
    */
   const saveHighlightFromSelection = (selection: PdfTextSelection) => {
     const trimmed = selection.text.trim();
@@ -605,7 +512,7 @@ export default function FileViewerPage() {
       fileId,
       page: selection.page,
       text: trimmed,
-      color: highlightColor,
+      color: HIGHLIGHT_COLOR,
       startOffset: null,
       endOffset: null,
     });
@@ -1120,72 +1027,6 @@ export default function FileViewerPage() {
                         );
                       })}
                     </div>
-                    <p className="mb-2 mt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Highlight color</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {HIGHLIGHT_COLOR_OPTIONS.map((option) => {
-                        const selected = highlightColor === option.id;
-                        return (
-                          <button
-                            key={`highlight-color-default-${option.id}`}
-                            type="button"
-                            onClick={() => setHighlightColor(option.id)}
-                            className={[
-                              "flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs transition",
-                              selected
-                                ? "border-blue-300 bg-blue-50 text-blue-700"
-                                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
-                            ].join(" ")}
-                          >
-                            <span className="inline-flex h-4 w-4 rounded-sm border border-slate-300" style={{ backgroundColor: option.swatch }} />
-                            {option.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <p className="mb-2 mt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Page color</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {PAGE_TONE_OPTIONS.map((option) => {
-                        const selected = pageTone === option.id;
-                        return (
-                          <button
-                            key={`page-tone-default-${option.id}`}
-                            type="button"
-                            onClick={() => setPageTone(option.id)}
-                            className={[
-                              "flex items-center justify-center gap-2 rounded-md border px-2 py-1.5 text-[11px] transition",
-                              selected
-                                ? "border-blue-300 bg-blue-50 text-blue-700"
-                                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
-                            ].join(" ")}
-                          >
-                            <span className="inline-flex h-3.5 w-3.5 rounded-full border border-slate-300" style={{ backgroundColor: option.swatch }} />
-                            {option.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <p className="mb-2 mt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Book cover color</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {COVER_TONE_OPTIONS.map((option) => {
-                        const selected = coverTone === option.id;
-                        return (
-                          <button
-                            key={`cover-tone-default-${option.id}`}
-                            type="button"
-                            onClick={() => setCoverTone(option.id)}
-                            className={[
-                              "flex items-center justify-center gap-2 rounded-md border px-2 py-1.5 text-[11px] transition",
-                              selected
-                                ? "border-blue-300 bg-blue-50 text-blue-700"
-                                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
-                            ].join(" ")}
-                          >
-                            <span className="inline-flex h-3.5 w-3.5 rounded-full border border-slate-300" style={{ backgroundColor: option.swatch }} />
-                            {option.label}
-                          </button>
-                        );
-                      })}
-                    </div>
                   </div>
                 )}
               </div>
@@ -1222,8 +1063,6 @@ export default function FileViewerPage() {
             </div>
             <div className="flex flex-col gap-2">
               {highlights.map((highlight) => {
-                const colorId = resolveHighlightColorId(highlight.color);
-                const swatch = getHighlightSwatch(colorId);
                 return (
                   <div
                     key={highlight.id}
@@ -1231,7 +1070,7 @@ export default function FileViewerPage() {
                   >
                     <span
                       className="mt-1 inline-block h-3 w-3 shrink-0 rounded-sm border border-slate-300"
-                      style={{ backgroundColor: swatch }}
+                      style={{ backgroundColor: HIGHLIGHT_COLOR }}
                     />
                     <button
                       type="button"
@@ -1242,23 +1081,6 @@ export default function FileViewerPage() {
                       <p className="mt-0.5 line-clamp-3 text-slate-600">“{highlight.text}”</p>
                     </button>
                     <div className="flex items-center gap-1">
-                      <select
-                        value={colorId}
-                        onChange={(event) =>
-                          updateHighlightColorMutation.mutate({
-                            id: highlight.id,
-                            color: event.target.value as HighlightColorId,
-                          })
-                        }
-                        className="rounded-md border border-slate-300 bg-white px-1 py-0.5 text-[11px] text-slate-700"
-                        aria-label="Change highlight color"
-                      >
-                        {HIGHLIGHT_COLOR_OPTIONS.map((option) => (
-                          <option key={option.id} value={option.id}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
                       <button
                         type="button"
                         onClick={() => deleteHighlightMutation.mutate(highlight.id)}
@@ -1335,8 +1157,6 @@ export default function FileViewerPage() {
             activeKeywordHitPage={activeKeywordTarget?.page}
             activeKeywordHitOccurrenceInPage={activeKeywordTarget?.occurrenceInPage}
             bookmarkColor={bookmarkColor}
-            pageTone={pageTone}
-            coverTone={coverTone}
             isFullscreen={isFullscreen}
             previewMode={previewMode}
             readerFabSizeRem={isFullscreen ? READER_CHAT_ROOM.fabSizeRem * 0.5 : undefined}
@@ -1352,7 +1172,7 @@ export default function FileViewerPage() {
             }}
             bookmarkedPages={bookmarkedPages}
             pageHighlights={projectedPageHighlights}
-            defaultHighlightColor={getHighlightSwatch(highlightColor)}
+            defaultHighlightColor={HIGHLIGHT_COLOR}
             onPdfTextSelected={setPdfTextSelection}
           />
         </div>
@@ -1368,7 +1188,6 @@ export default function FileViewerPage() {
       {pdfTextSelection ? (
         <SelectionToolbar
           selection={pdfTextSelection}
-          highlightColor={getHighlightSwatch(highlightColor)}
           onHighlight={() => saveHighlightFromSelection(pdfTextSelection)}
           onAddNote={() => openNoteComposerFromSelection(pdfTextSelection)}
           onCopy={() => {
@@ -1400,7 +1219,6 @@ export default function FileViewerPage() {
 
 interface SelectionToolbarProps {
   selection: PdfTextSelection;
-  highlightColor: string;
   onHighlight: () => void;
   onAddNote: () => void;
   onCopy: () => void;
@@ -1414,7 +1232,6 @@ interface SelectionToolbarProps {
  */
 function SelectionToolbar({
   selection,
-  highlightColor,
   onHighlight,
   onAddNote,
   onCopy,
@@ -1447,7 +1264,7 @@ function SelectionToolbar({
       >
         <span
           className="inline-block h-3 w-3 rounded-sm border border-slate-300"
-          style={{ backgroundColor: highlightColor }}
+          style={{ backgroundColor: HIGHLIGHT_COLOR }}
         />
         Highlight
       </button>
@@ -1679,32 +1496,8 @@ function getBookmarkColorStorageKey(fileId: string): string {
   return `bookmarkColor:${fileId}`;
 }
 
-function getHighlightColorStorageKey(fileId: string): string {
-  return `highlightColor:${fileId}`;
-}
-
-function getPageToneStorageKey(fileId: string): string {
-  return `pageTone:${fileId}`;
-}
-
-function getCoverToneStorageKey(fileId: string): string {
-  return `coverTone:${fileId}`;
-}
-
 function isBookmarkColorId(value: string): value is BookmarkColorId {
   return BOOKMARK_COLOR_OPTIONS.some((option) => option.id === value);
-}
-
-function isPageToneId(value: string): value is PageToneId {
-  return PAGE_TONE_OPTIONS.some((option) => option.id === value);
-}
-
-function isCoverToneId(value: string): value is CoverToneId {
-  return COVER_TONE_OPTIONS.some((option) => option.id === value);
-}
-
-function isHighlightColorId(value: string): value is HighlightColorId {
-  return HIGHLIGHT_COLOR_OPTIONS.some((option) => option.id === value);
 }
 
 function getBookmarkButtonStyle(

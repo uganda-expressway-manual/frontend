@@ -50,8 +50,6 @@ interface PDFViewerProps {
   activeKeywordHitOccurrenceInPage?: number;
   highlightEnabled?: boolean;
   bookmarkColor?: BookmarkColorId;
-  pageTone?: PageToneId;
-  coverTone?: CoverToneId;
   isFullscreen?: boolean;
   /** Embedded / preview URLs: hide zoom UI and lock magnification to 100%. */
   previewMode?: boolean;
@@ -101,8 +99,6 @@ export interface PdfTextSelection {
 }
 
 type BookmarkColorId = "silver" | "sand" | "ice" | "sage";
-type PageToneId = "white" | "ivory" | "mist";
-type CoverToneId = "slate" | "stone" | "forest";
 
 export function PDFViewer({
   fileUrl,
@@ -112,8 +108,6 @@ export function PDFViewer({
   activeKeywordHitOccurrenceInPage,
   highlightEnabled = true,
   bookmarkColor = "silver",
-  pageTone = "white",
-  coverTone = "slate",
   isFullscreen = false,
   previewMode = false,
   onCurrentPageChange,
@@ -1080,7 +1074,7 @@ export function PDFViewer({
         ].join(" ")}
         style={{
           touchAction: isSinglePageFullscreen ? "auto" : undefined,
-          ...(!isFullscreen ? getCoverSurfaceStyle(coverTone) : {}),
+          ...(!isFullscreen ? COVER_SURFACE_STYLE : {}),
         }}
         onClickCapture={onViewportClickCapture}
         onMouseMove={onViewportMouseMove}
@@ -1332,7 +1326,6 @@ export function PDFViewer({
             pageNumber={leftPage}
             isBookmarked={bookmarkedSet.has(leftPage)}
             bookmarkColor={bookmarkColor}
-            pageTone={pageTone}
             normalizedKeyword={normalizedKeyword}
             activeKeywordHitPage={activeKeywordHitPage}
             activeKeywordHitOccurrenceInPage={activeKeywordHitOccurrenceInPage}
@@ -1357,7 +1350,6 @@ export function PDFViewer({
               pageNumber={rightPage}
               isBookmarked={bookmarkedSet.has(rightPage)}
               bookmarkColor={bookmarkColor}
-              pageTone={pageTone}
               normalizedKeyword={normalizedKeyword}
               activeKeywordHitPage={activeKeywordHitPage}
               activeKeywordHitOccurrenceInPage={activeKeywordHitOccurrenceInPage}
@@ -1597,7 +1589,6 @@ interface BookPageProps {
   activeKeywordHitOccurrenceInPage?: number;
   isBookmarked: boolean;
   bookmarkColor: BookmarkColorId;
-  pageTone: PageToneId;
   pageWidth: number;
   pageHeight?: number;
   isMobileView: boolean;
@@ -1625,7 +1616,6 @@ function BookPage({
   activeKeywordHitOccurrenceInPage,
   isBookmarked,
   bookmarkColor,
-  pageTone,
   pageWidth,
   pageHeight,
   isMobileView,
@@ -1640,7 +1630,6 @@ function BookPage({
   pageHighlights,
   defaultHighlightColor,
 }: BookPageProps) {
-  const pageSurface = getPageSurfaceStyle(pageTone);
   const isZoomed = zoomScale > 1;
 
   const renderPdfPage = (pageToRender: number) => {
@@ -1752,7 +1741,7 @@ function BookPage({
               ? "cursor-e-resize"
               : "cursor-w-resize",
       ].join(" ")}
-      style={!isFullscreen ? { backgroundColor: pageSurface.pageBodyColor } : undefined}
+      style={!isFullscreen ? { backgroundColor: PAGE_BODY_COLOR } : undefined}
       onClick={(event) => {
         if (isFullscreen && isZoomed) {
           return;
@@ -1826,7 +1815,7 @@ function BookPage({
               : "h-[700px]",
         ].join(" ")}
         style={{
-          backgroundColor: isFullscreen ? "#ffffff" : pageSurface.pageCanvasColor,
+          backgroundColor: isFullscreen ? "#ffffff" : PAGE_CANVAS_COLOR,
         }}
       >
         {!isFullscreen && isBookmarked && <BookmarkRibbon color={bookmarkColor} />}
@@ -1850,7 +1839,7 @@ function BookPage({
                   ? "animate-[mobilePageSlideInNext_460ms_ease-in-out]"
                   : "animate-[mobilePageSlideInPrev_460ms_ease-in-out]",
               ].join(" ")}
-              style={{ backgroundColor: pageSurface.pageCanvasColor }}
+              style={{ backgroundColor: PAGE_CANVAS_COLOR }}
             >
               {renderPdfPage(mobileIncomingPage)}
             </div>
@@ -1898,44 +1887,11 @@ function getBookmarkImageSource(color: BookmarkColorId): string {
   }
 }
 
-function getPageSurfaceStyle(pageTone: PageToneId): { pageBodyColor: string; pageCanvasColor: string } {
-  switch (pageTone) {
-    case "ivory":
-      return {
-        pageBodyColor: "#fcfaf4",
-        pageCanvasColor: "#f7f1e6",
-      };
-    case "mist":
-      return {
-        pageBodyColor: "#f8faff",
-        pageCanvasColor: "#eef3fb",
-      };
-    case "white":
-    default:
-      return {
-        pageBodyColor: "#ffffff",
-        pageCanvasColor: "#ffffff",
-      };
-  }
-}
-
-function getCoverSurfaceStyle(coverTone: CoverToneId): { background: string } {
-  switch (coverTone) {
-    case "stone":
-      return {
-        background: "linear-gradient(135deg, #efe5dc 0%, #f8f3ee 48%, #e8ddd0 100%)",
-      };
-    case "forest":
-      return {
-        background: "linear-gradient(135deg, #d9e5d7 0%, #edf3eb 48%, #d0decf 100%)",
-      };
-    case "slate":
-    default:
-      return {
-        background: "linear-gradient(135deg, #e2e8f0 0%, #f8fafc 48%, #dbe3ee 100%)",
-      };
-  }
-}
+const PAGE_BODY_COLOR = "#ffffff";
+const PAGE_CANVAS_COLOR = "#ffffff";
+const COVER_SURFACE_STYLE: { background: string } = {
+  background: "linear-gradient(135deg, #e2e8f0 0%, #f8fafc 48%, #dbe3ee 100%)",
+};
 
 function clampPage(page: number, numPages: number): number {
   return Math.min(Math.max(1, page), Math.max(1, numPages));

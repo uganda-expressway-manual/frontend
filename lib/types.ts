@@ -116,10 +116,7 @@ export interface HighlightItem {
   page: number;
   /** Selected text (verbatim). Used both for display in lists and for visual restoration on the page. */
   text: string;
-  /**
-   * Palette key. Server stores it as a string so the catalog can grow without a migration;
-   * the frontend normalizes anything outside `HIGHLIGHT_COLOR_OPTIONS` back to "yellow".
-   */
+  /** CSS color string from the backend. The frontend no longer offers a color picker — every new highlight is saved with the same fixed fill — but older rows may still carry a value here. */
   color?: string | null;
   /** Inclusive 0-based offset of the highlight start within the page's plain text (`Content.content`). */
   startOffset?: number | null;

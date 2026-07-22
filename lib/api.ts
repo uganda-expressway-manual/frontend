@@ -614,10 +614,6 @@ export async function createHighlight(payload: CreateHighlightPayload): Promise<
   return (await api.post<HighlightItem>("/highlights", payload)).data;
 }
 
-export async function updateHighlightColor(highlightId: string, color: string): Promise<HighlightItem> {
-  return (await api.patch<HighlightItem>(`/highlights/${encodeURIComponent(highlightId)}`, { color })).data;
-}
-
 export async function deleteHighlight(highlightId: string): Promise<void> {
   await api.delete(`/highlights/${encodeURIComponent(highlightId)}`);
 }
