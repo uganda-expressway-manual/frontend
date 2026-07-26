@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import BookHomepage from "@/components/BookHomepage";
+import { HomepageDemoSection } from "@/components/imme/homepage-demo-section";
 import { hasAuthSession } from "@/lib/auth-session";
 import { useAuth } from "@/lib/hooks/use-auth";
 import { MANUAL_HOME_FADE_IN_KEY } from "@/lib/manual-home-fade";
@@ -86,15 +87,18 @@ export default function HomePage() {
   }
 
   return (
-    <div
-      style={{
-        minHeight: "100dvh",
-        opacity: manualMotion.opacity,
-        transform: `translateY(${manualMotion.translateY}px)`,
-        transition: `opacity ${MANUAL_FADE_MS}ms ease-out, transform ${MANUAL_FADE_MS}ms ease-out`,
-      }}
-    >
-      <BookHomepage onLoginClick={openLogin} />
-    </div>
+    <>
+      <div
+        style={{
+          minHeight: "100dvh",
+          opacity: manualMotion.opacity,
+          transform: `translateY(${manualMotion.translateY}px)`,
+          transition: `opacity ${MANUAL_FADE_MS}ms ease-out, transform ${MANUAL_FADE_MS}ms ease-out`,
+        }}
+      >
+        <BookHomepage onLoginClick={openLogin} />
+      </div>
+      <HomepageDemoSection />
+    </>
   );
 }
