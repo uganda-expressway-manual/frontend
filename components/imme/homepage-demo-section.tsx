@@ -6,8 +6,8 @@ import { useEffect, useRef, useState } from "react";
 const DEMO_VIDEO_SRC = "/uganda-expressway-manual%20(demo).mp4";
 
 /**
- * Sits below the interactive book cover — reveals on scroll so it never competes with the
- * cover for attention on first paint. Fade + slight rise mirrors the book's own reveal motion.
+ * Second homepage slide (see `HomeSlideDeck`) — fills the full slide height and fades in
+ * the first time it scrolls into view, mirroring the book's own reveal motion.
  */
 export function HomepageDemoSection() {
   const sectionRef = useRef<HTMLElement>(null);
@@ -30,8 +30,8 @@ export function HomepageDemoSection() {
   }, []);
 
   return (
-    <section ref={sectionRef} className="border-t border-imme-line bg-white py-16 sm:py-20 lg:py-24">
-      <div className="imme-container">
+    <section ref={sectionRef} className="flex h-full w-full items-center bg-white">
+      <div className="imme-container w-full py-10 sm:py-12">
         <div
           style={{
             opacity: isVisible ? 1 : 0,
@@ -47,7 +47,7 @@ export function HomepageDemoSection() {
           </p>
           <div className="mt-8 overflow-hidden rounded-imme border border-imme-line bg-imme-concrete shadow-imme-card">
             <video
-              className="block h-auto w-full"
+              className="block h-auto max-h-[52dvh] w-full"
               src={DEMO_VIDEO_SRC}
               controls
               playsInline

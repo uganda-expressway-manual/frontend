@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import BookHomepage from "@/components/BookHomepage";
+import { HomeSlideDeck } from "@/components/imme/home-slide-deck";
 import { HomepageDemoSection } from "@/components/imme/homepage-demo-section";
 import { hasAuthSession } from "@/lib/auth-session";
 import { useAuth } from "@/lib/hooks/use-auth";
@@ -87,18 +88,32 @@ export default function HomePage() {
   }
 
   return (
-    <>
-      <div
-        style={{
-          minHeight: "100dvh",
-          opacity: manualMotion.opacity,
-          transform: `translateY(${manualMotion.translateY}px)`,
-          transition: `opacity ${MANUAL_FADE_MS}ms ease-out, transform ${MANUAL_FADE_MS}ms ease-out`,
-        }}
-      >
-        <BookHomepage onLoginClick={openLogin} />
-      </div>
-      <HomepageDemoSection />
-    </>
+    <HomeSlideDeck
+      slides={[
+        {
+          id: "manual-preview",
+          label: "Manual preview",
+          content: (
+            <div
+              style={{
+                height: "100%",
+                display: "flex",
+                flexDirection: "column",
+                opacity: manualMotion.opacity,
+                transform: `translateY(${manualMotion.translateY}px)`,
+                transition: `opacity ${MANUAL_FADE_MS}ms ease-out, transform ${MANUAL_FADE_MS}ms ease-out`,
+              }}
+            >
+              <BookHomepage onLoginClick={openLogin} />
+            </div>
+          ),
+        },
+        {
+          id: "demo-video",
+          label: "Demo video",
+          content: <HomepageDemoSection />,
+        },
+      ]}
+    />
   );
 }

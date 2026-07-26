@@ -1159,11 +1159,11 @@ export default function BookHomepage({ onLoginClick }) {
       </main>
 
       <style>{`
-        /* Reserve scrollbar width at all times so the layout never shifts when
-           overflow:auto kicks in during page navigation or animation. */
+        /* The homepage's slide deck (HomeSlideDeck) owns all scrolling for this page — its
+           own container scrolls internally, so the outer document must never scroll too,
+           or the browser shows a second, redundant scrollbar next to the deck's. */
         html {
-          scrollbar-gutter: stable;
-          overflow-y: scroll;
+          overflow-y: hidden;
         }
 
         /* ── Open / close: no hinge flips — fade & light motion only ── */
