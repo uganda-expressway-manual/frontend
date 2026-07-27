@@ -1,4 +1,14 @@
 # MoWT Integrated Manual Smart E-Book
+[<img width="1672" height="941" alt="uganda-expressway-manual-logo" src="https://github.com/user-attachments/assets/b098e43c-c60c-43bd-bb5c-01254e9e20f8" />
+](https://youtu.be/nPgjmR53FNE?si=3BJIgboUUA2cXCkn)
+
+*(Click the thumbnail above to watch the full demo on YouTube)*
+
+</br></br></br>
+
+
+
+
 
 ### Service Overview
 &nbsp;&nbsp;&nbsp;The MoWT Integrated Manual Smart E-Book is a web-based platform designed to provide efficient, intelligent access to the Uganda Expressway Manual. By combining high-speed search capabilities with AI features, the service enables users to navigate complex technical documentation with greater speed and clarity.
