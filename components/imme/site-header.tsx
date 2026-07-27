@@ -6,9 +6,7 @@ import { useAuth } from "@/lib/hooks/use-auth";
 import { hasAuthSession } from "@/lib/auth-session";
 import { isAdminUser } from "@/lib/auth-user";
 import { IMME_TEAM_EMAILS } from "@/lib/imme/project";
-
-const contactBtnClass =
-  "inline-flex items-center justify-center rounded-full border border-imme-line bg-white px-3 py-1.5 text-xs font-semibold text-imme-navy transition hover:bg-imme-concrete sm:px-4 sm:text-[13px]";
+import { CloseIcon, MailIcon } from "@/components/imme/imme-icons";
 
 const CONTACT_PANEL_FADE_MS = 200;
 
@@ -49,11 +47,16 @@ function ContactPopoverButton({ onNavigate }: { onNavigate?: () => void }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
+  const contacts = [IMME_TEAM_EMAILS.developer, IMME_TEAM_EMAILS.projectManager];
+
   return (
     <div ref={wrapRef} className="relative">
       <button
         type="button"
-        className={contactBtnClass}
+        className={[
+          "inline-flex items-center justify-center rounded-full border px-3 py-1.5 text-xs font-semibold transition sm:px-4 sm:text-[13px]",
+          open ? "border-imme-navy bg-imme-navy text-white" : "border-imme-line bg-white text-imme-navy hover:bg-imme-concrete",
+        ].join(" ")}
         aria-expanded={open}
         aria-controls="site-header-contact-panel"
         id="site-header-contact-trigger"
@@ -68,31 +71,38 @@ function ContactPopoverButton({ onNavigate }: { onNavigate?: () => void }) {
           aria-labelledby="site-header-contact-trigger"
           aria-hidden={!panelVisible}
           className={[
-            "absolute right-0 top-full z-[60] mt-2 w-[min(calc(100vw-24px),18rem)] rounded-imme border border-imme-line bg-white px-3 py-3 text-left shadow-imme-card",
-            "transition-opacity duration-200 ease-out",
-            panelVisible ? "opacity-100" : "pointer-events-none opacity-0",
+            "absolute right-0 top-full z-[60] mt-2 w-[min(calc(100vw-24px),19rem)] rounded-imme border border-imme-line bg-white p-5 text-left shadow-imme-card",
+            "transition-[opacity,transform] duration-200 ease-out",
+            panelVisible ? "translate-y-0 opacity-100" : "pointer-events-none -translate-y-1 opacity-0",
           ].join(" ")}
         >
-          <p className="font-serif text-[12px] leading-relaxed text-imme-navy">
-            <span className="font-semibold">{IMME_TEAM_EMAILS.developer.role}: </span>
-            <a
-              href={`mailto:${IMME_TEAM_EMAILS.developer.email}`}
-              className="text-imme-navy underline decoration-imme-line underline-offset-2 hover:text-imme-navy-700"
-              {...(onNavigate ? { onClick: onNavigate } : {})}
+          <div className="flex items-center justify-between">
+            <p className="font-display text-sm font-bold text-imme-navy">Get in touch</p>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              aria-label="Close contact panel"
+              className="-m-1 rounded-full p-1 text-imme-muted transition hover:bg-imme-concrete hover:text-imme-navy"
             >
-              {IMME_TEAM_EMAILS.developer.email}
-            </a>
-          </p>
-          <p className="mt-2 font-serif text-[12px] leading-relaxed text-imme-navy">
-            <span className="font-semibold">{IMME_TEAM_EMAILS.projectManager.role}: </span>
-            <a
-              href={`mailto:${IMME_TEAM_EMAILS.projectManager.email}`}
-              className="text-imme-navy underline decoration-imme-line underline-offset-2 hover:text-imme-navy-700"
-              {...(onNavigate ? { onClick: onNavigate } : {})}
-            >
-              {IMME_TEAM_EMAILS.projectManager.email}
-            </a>
-          </p>
+              <CloseIcon className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          <div className="mt-4 flex flex-col gap-3">
+            {contacts.map((contact) => (
+              <div key={contact.email}>
+                <p className="imme-eyebrow">{contact.role}</p>
+                <a
+                  href={`mailto:${contact.email}`}
+                  className="mt-1.5 flex items-center justify-between gap-2 rounded-imme bg-imme-concrete px-3 py-2 text-[13px] text-imme-navy transition hover:bg-imme-line/60"
+                  {...(onNavigate ? { onClick: onNavigate } : {})}
+                >
+                  {contact.email}
+                  <MailIcon className="h-3.5 w-3.5 shrink-0 text-imme-muted" />
+                </a>
+              </div>
+            ))}
+          </div>
         </div>
       ) : null}
     </div>
