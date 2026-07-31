@@ -110,6 +110,40 @@ export function HomeSlideDeck({ slides }: { slides: Slide[] }) {
           })}
         </nav>
       ) : null}
+
+      {slides.length > 1 && activeIndex < slides.length - 1 ? (
+        <button
+          type="button"
+          onClick={() => goTo(activeIndex + 1)}
+          aria-label={`Scroll to ${slides[activeIndex + 1].label}`}
+          /* Mobile: no side margin around the portrait cover, so stay bottom-center (above the
+             dot row). From `sm` up the cover leaves wide empty side margins — shift into the
+             right-hand margin instead (the dot rail stays vertically centered, well above this),
+             so the hint never overlaps the book art. Each axis is touched by exactly one base
+             class + one `sm:` override of that same property, so the breakpoint swap is
+             unambiguous regardless of Tailwind's internal utility ordering. */
+          className="pointer-events-auto fixed bottom-16 left-1/2 z-30 flex w-fit -translate-x-1/2 flex-col items-center gap-2 sm:left-auto sm:right-6 sm:translate-x-0"
+        >
+          <span className="whitespace-nowrap rounded-full bg-white/90 px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-imme-navy shadow-imme-card backdrop-blur">
+            Scroll to watch the demo
+          </span>
+          <span className="home-scroll-hint-chevron flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-imme-navy shadow-imme-card backdrop-blur">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
+        </button>
+      ) : null}
+
+      <style>{`
+        @keyframes homeScrollHintBounce {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(5px); }
+        }
+        .home-scroll-hint-chevron {
+          animation: homeScrollHintBounce 1.6s ease-in-out infinite;
+        }
+      `}</style>
     </div>
   );
 }
