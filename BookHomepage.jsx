@@ -195,6 +195,23 @@ const BOOK_LAYOUT_VARS = {
   '--book-cover-w': 'calc(var(--book-page-h) * 480 / 680)',
 };
 
+/**
+ * Mobile shows one portrait page at a time (cover ratio 480:680), never the
+ * 962:680 two-page spread — so the width-derived height clause must use the
+ * portrait ratio too. Reusing the spread ratio here starved the page height
+ * on narrow phones (a ~390px-wide screen resolved to ~250px tall instead of
+ * ~500px), leaving the book card tiny with a large empty gap around it.
+ * The larger 160px budget also clears the fixed bottom-center
+ * "Scroll to watch the demo" pill, which only sits bottom-center on mobile.
+ */
+const MOBILE_BOOK_LAYOUT_VARS = {
+  '--book-page-h':
+    'min(calc(100dvh - 160px), calc((100vw - 24px) * 680 / 480))',
+  '--book-spread-w':
+    'min(calc(100vw - 24px), calc((100dvh - 160px) * 962 / 680))',
+  '--book-cover-w': 'calc(var(--book-page-h) * 480 / 680)',
+};
+
 const BOOK_PAGE_H = 'var(--book-page-h)';
 const BOOK_SPREAD_W = 'var(--book-spread-w)';
 
@@ -1084,9 +1101,9 @@ export default function BookHomepage({ onLoginClick }) {
       <main
         data-imme-manual-book
         style={{
-          ...BOOK_LAYOUT_VARS,
+          ...(isMobile ? MOBILE_BOOK_LAYOUT_VARS : BOOK_LAYOUT_VARS),
           flex: '1 1 auto',
-          minHeight: 'calc(100dvh - 72px)',
+          height: '100%',
           width: '100%',
           display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center',
