@@ -5,7 +5,9 @@ import { SiteHeader } from "@/components/imme/site-header";
 
 /**
  * Wraps the public IMME site pages in the public header.
- * The footer has been removed so the book homepage fills the full viewport.
+ * The homepage's own copyright line lives at the bottom of its demo-video slide
+ * (see `HomepageDemoSection`) rather than here, so the book deck still fills the
+ * full viewport below the header.
  */
 export function ImmePublicShell({ children }: { children: ReactNode }) {
   return (

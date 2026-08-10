@@ -29,8 +29,10 @@ export function HomepageDemoSection() {
     return () => observer.disconnect();
   }, []);
 
+  const year = new Date().getFullYear();
+
   return (
-    <section ref={sectionRef} className="flex h-full w-full items-center bg-white">
+    <section ref={sectionRef} className="relative flex h-full w-full items-center bg-white">
       <div className="imme-container w-full py-10 sm:py-12">
         <div
           style={{
@@ -57,6 +59,13 @@ export function HomepageDemoSection() {
           </div>
         </div>
       </div>
+
+      {/* Copyright — plain text, no box. Sits above the deck's pagination dots (bottom-4). */}
+      <p className="absolute inset-x-0 bottom-12 px-4 text-center text-[11px] leading-relaxed text-imme-muted sm:bottom-10">
+        © {year} Kim Juho (김주호). All rights reserved.
+        <br />
+        Registered with the Korea Copyright Commission &middot; Reg. No. C-2026-038711
+      </p>
     </section>
   );
 }

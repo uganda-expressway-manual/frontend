@@ -7,9 +7,6 @@
 </br></br></br>
 
 
-
-
-
 ### Service Overview
 &nbsp;&nbsp;&nbsp;The MoWT Integrated Manual Smart E-Book is a web-based platform designed to provide efficient, intelligent access to the Uganda Expressway Manual. By combining high-speed search capabilities with AI features, the service enables users to navigate complex technical documentation with greater speed and clarity.
 
@@ -30,8 +27,6 @@
 
 </br>
 
-
-
 ### Domain
 [https://uganda-expressway-manual.com/](https://uganda-expressway-manual.com)
 
@@ -41,4 +36,19 @@
 - [Gemini API Documentation](https://ai.google.dev/gemini-api/docs)
 - [Gemini FileSearchStore Documentation](https://ai.google.dev/gemini-api/docs/file-search)
 - [Free DNS service - For backend](https://noip.com/)
-  
+
+</br>
+
+### Copyright & License
+
+Copyright © 2026 Juho Kim (김주호). All rights reserved.
+
+- **Title of Work:** 우간다 공공사업교통부 통합 매뉴얼 스마트 전자책 (MoWT Integrated Manual Smart E-Book)
+- **Registration No.:** C-2026-038711 (Korea Copyright Commission)
+- **Type of Work:** Computer Program Work (Application / Office Management)
+- **Author:** Juho Kim (김주호)
+- **Creation Date:** March 04, 2026
+- **Publication Date:** April 10, 2026
+- **Registration Date:** August 10, 2026
+
+This software program is registered with the Korea Copyright Commission and is the exclusive property of Juho Kim. Unauthorized copying, modification, distribution, or commercial use without prior written consent is strictly prohibited.

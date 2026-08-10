@@ -185,13 +185,16 @@ const FLIP_MS = 880; // in-book page turns (desktop 3‑D overlay + mobile slide
 
 /**
  * Design reference: spread 962×680, cover spine+face portrait 480×680 (same page height).
- * Fills viewport as much as possible while preserving ratio; subtracts ~header + gutters.
+ * Fills viewport as much as possible while preserving ratio; subtracts ~header + footer + gutters.
+ * (`<main>` itself is already sized to exclude the real header/footer — see the `height: '100%'`
+ * comment below — but these vars size the *card*, computed independently off raw `100dvh`, so
+ * they need their own budget for that same chrome or the card can render taller than its box.)
  */
 const BOOK_LAYOUT_VARS = {
   '--book-page-h':
-    'min(calc(100dvh - 96px), calc((100vw - 24px) * 680 / 962))',
+    'min(calc(100dvh - 136px), calc((100vw - 24px) * 680 / 962))',
   '--book-spread-w':
-    'min(calc(100vw - 24px), calc((100dvh - 96px) * 962 / 680))',
+    'min(calc(100vw - 24px), calc((100dvh - 136px) * 962 / 680))',
   '--book-cover-w': 'calc(var(--book-page-h) * 480 / 680)',
 };
 
@@ -201,14 +204,14 @@ const BOOK_LAYOUT_VARS = {
  * portrait ratio too. Reusing the spread ratio here starved the page height
  * on narrow phones (a ~390px-wide screen resolved to ~250px tall instead of
  * ~500px), leaving the book card tiny with a large empty gap around it.
- * The larger 160px budget also clears the fixed bottom-center
- * "Scroll to watch the demo" pill, which only sits bottom-center on mobile.
+ * The 220px budget also clears the fixed bottom-center "Scroll to watch the demo" pill
+ * (mobile-only) plus the footer's real height, which on mobile stacks to two lines.
  */
 const MOBILE_BOOK_LAYOUT_VARS = {
   '--book-page-h':
-    'min(calc(100dvh - 160px), calc((100vw - 24px) * 680 / 480))',
+    'min(calc(100dvh - 220px), calc((100vw - 24px) * 680 / 480))',
   '--book-spread-w':
-    'min(calc(100vw - 24px), calc((100dvh - 160px) * 962 / 680))',
+    'min(calc(100vw - 24px), calc((100dvh - 220px) * 962 / 680))',
   '--book-cover-w': 'calc(var(--book-page-h) * 480 / 680)',
 };
 
