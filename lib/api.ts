@@ -627,7 +627,10 @@ export async function patchFileFilename(fileId: string, filename: string): Promi
 }
 
 export async function patchFileOrder(folderId: string, fileIds: string[]): Promise<void> {
-  await api.patch(`/files/order/${encodeURIComponent(folderId)}`, { fileIds });
+  await api.patch(`/files/order`, {
+    folderId,
+    orders: fileIds.map((fileId, order) => ({ fileId, order })),
+  });
 }
 
 /** GET `/folders/:folderId/rag-status` — which files in the folder are indexed in its FileSearchStore (admin only). */
