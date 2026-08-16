@@ -130,6 +130,9 @@ function Book3D({
   ragStatusLoading = false,
   onUploadToRag,
   ragUploadPending = false,
+  allowRename = false,
+  onRename,
+  renamePending = false,
 }: {
   file: FolderFile;
   isAdmin: boolean;
@@ -154,6 +157,9 @@ function Book3D({
   ragStatusLoading?: boolean;
   onUploadToRag?: (file: FolderFile) => void;
   ragUploadPending?: boolean;
+  allowRename?: boolean;
+  onRename?: (fileId: string, filename: string) => void;
+  renamePending?: boolean;
 }) {
   const router = useRouter();
   const bookRef = useRef<HTMLDivElement>(null);
@@ -165,6 +171,8 @@ function Book3D({
   const [showTip, setShowTip] = useState(false);
   const [departing, setDeparting] = useState(false);
   const [justArrived, setJustArrived] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [renameDraft, setRenameDraft] = useState("");
 
   const spineColor = getSpineColor(file.filename);
   const jitter = getVerticalJitter(file.filename);
@@ -235,9 +243,19 @@ function Book3D({
     if (timerRef.current) clearTimeout(timerRef.current);
   };
   const handleClick = () => {
-    if (departing) return;
+    if (departing || renaming) return;
     setDeparting(true);
     setTimeout(() => router.push(`/files/${file.id}`), FILE_OPEN_MS);
+  };
+
+  const commitRename = () => {
+    const trimmed = renameDraft.trim();
+    if (!trimmed || trimmed === file.filename) {
+      setRenaming(false);
+      return;
+    }
+    onRename?.(file.id, trimmed);
+    setRenaming(false);
   };
 
   // ── Render ──
@@ -573,6 +591,93 @@ function Book3D({
               ×
             </button>
           )}
+
+          {/* Admin rename ✎ */}
+          {isAdmin && allowRename && onRename && !renaming && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setRenameDraft(file.filename);
+                setRenaming(true);
+              }}
+              style={{
+                position: "absolute", bottom: 6, left: 6,
+                width: 20, height: 20,
+                borderRadius: "50%",
+                background: "rgba(0,0,0,0.4)",
+                border: "none", color: "#fff",
+                fontSize: 11,
+                cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                opacity: hovered ? 1 : 0,
+                transition: "opacity 150ms ease",
+                lineHeight: 1, padding: 0,
+                zIndex: 10,
+              }}
+              title="Rename file"
+              aria-label={`Rename ${file.filename}`}
+            >
+              ✎
+            </button>
+          )}
+
+          {/* Inline rename overlay */}
+          {renaming && (
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                position: "absolute", inset: 0,
+                background: "rgba(250,248,243,0.97)",
+                display: "flex", flexDirection: "column",
+                justifyContent: "center",
+                padding: 10, gap: 8,
+                zIndex: 20,
+              }}
+            >
+              <input
+                value={renameDraft}
+                onChange={(e) => setRenameDraft(e.target.value)}
+                autoFocus
+                className="ui-input"
+                style={{
+                  width: "100%", boxSizing: "border-box",
+                  fontFamily: fontSerif, fontSize: 12,
+                  padding: "6px 8px", borderRadius: 3,
+                  border: `1px solid ${C.border}`,
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); commitRename(); }
+                  if (e.key === "Escape") { setRenaming(false); }
+                }}
+              />
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  type="button"
+                  onClick={commitRename}
+                  disabled={renamePending}
+                  style={{
+                    flex: 1, fontFamily: fontSerif, fontSize: 11, padding: "5px 0",
+                    background: C.navy, color: "#fff", border: "none", borderRadius: 3,
+                    cursor: "pointer", opacity: renamePending ? 0.6 : 1,
+                  }}
+                >
+                  {renamePending ? "…" : "Save"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRenaming(false)}
+                  style={{
+                    flex: 1, fontFamily: fontSerif, fontSize: 11, padding: "5px 0",
+                    background: "transparent", color: C.navy, border: `1px solid ${C.border}`,
+                    borderRadius: 3, cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -601,6 +706,9 @@ function ShelfRow({
   ragStatusLoading,
   onUploadToRag,
   ragUploadPendingId,
+  allowRename = false,
+  onRename,
+  renamePendingId = null,
 }: {
   files: FolderFile[];
   isAdmin: boolean;
@@ -621,6 +729,9 @@ function ShelfRow({
   ragStatusLoading?: boolean;
   onUploadToRag?: (file: FolderFile) => void;
   ragUploadPendingId?: string | null;
+  allowRename?: boolean;
+  onRename?: (fileId: string, filename: string) => void;
+  renamePendingId?: string | null;
 }) {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
@@ -658,6 +769,9 @@ function ShelfRow({
               ragStatusLoading={ragStatusLoading}
               onUploadToRag={onUploadToRag}
               ragUploadPending={ragUploadPendingId === file.id}
+              allowRename={allowRename}
+              onRename={onRename}
+              renamePending={renamePendingId === file.id}
               adjacentShift={
                 hoveredIdx !== null
                   ? idx === hoveredIdx - 1 ? -6
@@ -1172,6 +1286,9 @@ export function BookshelfView({
   ragStatusLoading = false,
   onUploadToRag,
   ragUploadPendingId = null,
+  allowRename = false,
+  onRename,
+  renamePendingId = null,
 }: {
   files: FolderFile[];
   isAdmin: boolean;
@@ -1189,6 +1306,9 @@ export function BookshelfView({
   ragStatusLoading?: boolean;
   onUploadToRag?: (file: FolderFile) => void;
   ragUploadPendingId?: string | null;
+  allowRename?: boolean;
+  onRename?: (fileId: string, filename: string) => void;
+  renamePendingId?: string | null;
 }) {
   const [draggingFileId, setDraggingFileId] = useState<string | null>(null);
   const [dragOverFileId, setDragOverFileId] = useState<string | null>(null);
@@ -1280,6 +1400,9 @@ export function BookshelfView({
               ragStatusLoading={ragStatusLoading}
               onUploadToRag={onUploadToRag}
               ragUploadPendingId={ragUploadPendingId}
+              allowRename={allowRename}
+              onRename={onRename}
+              renamePendingId={renamePendingId}
               onBookDragStart={onBookDragStart}
               onBookDragEnd={onBookDragEnd}
               onBookDragOver={onBookDragOver}

@@ -711,6 +711,9 @@ export default function FolderPage() {
               ragStatusLoading={admin && ragStatusQuery.isLoading}
               onUploadToRag={(file) => uploadToRagMutation.mutate(file.id)}
               ragUploadPendingId={uploadToRagMutation.isPending ? uploadToRagMutation.variables ?? null : null}
+              allowRename={admin && !uploadBlockedForUser}
+              renamePendingId={renameFileMutation.isPending ? renameFileMutation.variables?.fileId ?? null : null}
+              onRename={(fileId, filename) => renameFileMutation.mutate({ fileId, filename })}
             />
             {(renameFileMutation.isError || reorderFilesMutation.isError) && (
               <p style={{ fontFamily: fontSerif, fontSize: 12, color: "#c0392b", marginTop: 12 }}>
