@@ -300,9 +300,17 @@ export function PDFViewer({
       .getPage(pageNumber)
       .then((page) => {
         const viewport = page.getViewport({ scale: 1 });
+        const ratio = viewport.height / viewport.width;
+        // A malformed page (e.g. a cover merged in from a different source with a
+        // degenerate MediaBox) can yield a zero/negative/NaN ratio — skip recording it
+        // so the existing fallback chain below is used instead of a broken layout.
+        if (!Number.isFinite(ratio) || ratio <= 0) {
+          pageAspectRatioRequestedRef.current.delete(pageNumber);
+          return;
+        }
         setPageAspectRatios((prev) => {
           const next = new Map(prev);
-          next.set(pageNumber, viewport.height / viewport.width);
+          next.set(pageNumber, ratio);
           return next;
         });
       })
@@ -1029,7 +1037,11 @@ export function PDFViewer({
         try {
           const page = await pdf.getPage(1);
           const viewport = page.getViewport({ scale: 1 });
-          setPdfPageViewportSize({ width: viewport.width, height: viewport.height });
+          if (Number.isFinite(viewport.width) && viewport.width > 0 && Number.isFinite(viewport.height) && viewport.height > 0) {
+            setPdfPageViewportSize({ width: viewport.width, height: viewport.height });
+          } else {
+            setPdfPageViewportSize(null);
+          }
         } catch (err) {
           if (!isPdfWorkerTerminatedError(err)) {
             setPdfPageViewportSize(null);

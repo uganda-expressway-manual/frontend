@@ -9,10 +9,12 @@
  *   3. Placeholder cover (spine color + title text) shown while loading / on error
  */
 
-import { useCallback, useEffect, useRef, useState, type DragEvent, type MouseEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type DragEvent, type MouseEvent } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { pdfjs } from "react-pdf";
 import { getPdfViewerPresignedUrl } from "@/lib/api";
+import { beginCardDragPreview, endCardDragPreview, moveCardDragPreview } from "@/lib/drag-ghost";
 import type { FolderFile } from "@/lib/types";
 
 // Same worker CDN already used in pdf-viewer.tsx
@@ -75,6 +77,10 @@ function formatDate(iso: string): string {
   }
 }
 
+/** US-Letter width in PDF points — used only as a fallback when a page's own MediaBox is degenerate. */
+const FALLBACK_PDF_PAGE_WIDTH_PT = 612;
+const MAX_THUMB_DIMENSION_PX = 4000;
+
 async function renderPdfThumbnail(pdfUrl: string, fileId: string): Promise<string> {
   const CACHE_KEY = `pdf-thumb-${fileId}`;
   try {
@@ -84,15 +90,19 @@ async function renderPdfThumbnail(pdfUrl: string, fileId: string): Promise<strin
 
   const task = pdfjs.getDocument({ url: pdfUrl });
   const pdf = await task.promise;
+  // Different files can have a differently-sized cover (page 1) than the rest of their
+  // pages; a malformed/degenerate MediaBox on that page must not crash the thumbnail —
+  // fall back to a sane default width instead of propagating NaN/0/Infinity into the canvas.
   const page = await pdf.getPage(1);
 
   const viewport = page.getViewport({ scale: 1 });
-  const scale = 200 / viewport.width;
-  const scaledViewport = page.getViewport({ scale });
+  const safeWidth = Number.isFinite(viewport.width) && viewport.width > 0 ? viewport.width : FALLBACK_PDF_PAGE_WIDTH_PT;
+  const scale = 200 / safeWidth;
+  const scaledViewport = page.getViewport({ scale: Number.isFinite(scale) && scale > 0 ? scale : 1 });
 
   const canvas = document.createElement("canvas");
-  canvas.width = scaledViewport.width;
-  canvas.height = scaledViewport.height;
+  canvas.width = Math.min(MAX_THUMB_DIMENSION_PX, Math.max(1, Math.round(scaledViewport.width) || 200));
+  canvas.height = Math.min(MAX_THUMB_DIMENSION_PX, Math.max(1, Math.round(scaledViewport.height) || 260));
 
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("No canvas context");
@@ -103,6 +113,178 @@ async function renderPdfThumbnail(pdfUrl: string, fileId: string): Promise<strin
   const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
   try { sessionStorage.setItem(CACHE_KEY, dataUrl); } catch { /* quota */ }
   return dataUrl;
+}
+
+// ─── File actions menu (three-dot → Rename / Delete) ───────────────────────────
+
+const contextMenuItemStyle: CSSProperties = {
+  width: "100%",
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  padding: "9px 14px",
+  border: "none",
+  background: "transparent",
+  cursor: "pointer",
+  fontFamily: fontSerif,
+  fontSize: 13,
+  color: C.dark,
+  textAlign: "left",
+};
+
+function MoreVerticalIcon({ color = "#fff" }: { color?: string }) {
+  return (
+    <svg width={14} height={14} viewBox="0 0 24 24" fill={color} aria-hidden>
+      <circle cx="12" cy="5" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="12" cy="19" r="1.6" />
+    </svg>
+  );
+}
+
+function PencilIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 20h9M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+    </svg>
+  );
+}
+
+function TrashIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18M8 6V4h8v2m-1 14H9a1 1 0 0 1-1-1V7h12v12a1 1 0 0 1-1 1z" />
+    </svg>
+  );
+}
+
+/**
+ * Three-dot trigger + dropdown (Rename / Delete) shared by the grid (Book3D) and
+ * list (ListView) file rows. The dropdown is `position: fixed` and computed from the
+ * trigger's own bounding rect on open, rather than absolutely positioned inside the
+ * caller's DOM — the grid cover face clips overflow (3D book face) and the list rows
+ * sit inside an `overflow: hidden` card, so a normal absolute dropdown would get cut off.
+ */
+function FileActionsMenu({
+  triggerLabel,
+  triggerStyle,
+  menuAlign = "right",
+  onRename,
+  onDelete,
+}: {
+  triggerLabel: string;
+  triggerStyle: CSSProperties;
+  menuAlign?: "left" | "right";
+  onRename?: () => void;
+  onDelete: () => void;
+}) {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left?: number; right?: number } | null>(null);
+
+  const openMenu = () => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setPos(
+      menuAlign === "right"
+        ? { top: rect.bottom + 4, right: Math.max(8, window.innerWidth - rect.right) }
+        : { top: rect.bottom + 4, left: Math.max(8, rect.left) }
+    );
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const closeIfOutside = (e: MouseEvent | globalThis.MouseEvent) => {
+      const target = e.target as Node;
+      if (triggerRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const closeOnScroll = () => setOpen(false);
+    document.addEventListener("mousedown", closeIfOutside);
+    window.addEventListener("scroll", closeOnScroll, true);
+    window.addEventListener("resize", closeOnScroll);
+    return () => {
+      document.removeEventListener("mousedown", closeIfOutside);
+      window.removeEventListener("scroll", closeOnScroll, true);
+      window.removeEventListener("resize", closeOnScroll);
+    };
+  }, [open]);
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-label={`Options for ${triggerLabel}`}
+        aria-expanded={open}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (open) setOpen(false);
+          else openMenu();
+        }}
+        style={{
+          border: "none",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 0,
+          lineHeight: 1,
+          ...triggerStyle,
+        }}
+      >
+        <MoreVerticalIcon color={(triggerStyle.color as string) ?? "#fff"} />
+      </button>
+      {open && pos && typeof document !== "undefined" &&
+        createPortal(
+          // Portaled to <body>: both callers (Book3D's 3D-transformed cover, ListView's
+          // scaled row) have a `transform`d ancestor, which would otherwise turn
+          // `position: fixed` into "fixed relative to that ancestor" instead of the viewport.
+          <div
+            ref={menuRef}
+            role="menu"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: "fixed",
+              top: pos.top,
+              left: pos.left,
+              right: pos.right,
+              zIndex: 200,
+              minWidth: 150,
+              background: C.paper,
+              border: `1px solid ${C.border}`,
+              borderRadius: 3,
+              boxShadow: "0 10px 28px rgba(0,0,0,0.16)",
+              padding: "4px 0",
+            }}
+          >
+            {onRename && (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => { setOpen(false); onRename(); }}
+                style={contextMenuItemStyle}
+              >
+                <PencilIcon size={14} />
+                Rename
+              </button>
+            )}
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => { setOpen(false); onDelete(); }}
+              style={{ ...contextMenuItemStyle, color: "#8b3a3a" }}
+            >
+              <TrashIcon size={14} />
+              Delete
+            </button>
+          </div>,
+          document.body
+        )}
+    </>
+  );
 }
 
 // ─── Book3D ────────────────────────────────────────────────────────────────────
@@ -120,6 +302,7 @@ function Book3D({
   isReorderDragged = false,
   isReorderDropTarget = false,
   onReorderDragStart,
+  onReorderDrag,
   onReorderDragEnd,
   onReorderDragOver,
   onReorderDragLeave,
@@ -144,6 +327,7 @@ function Book3D({
   isReorderDragged?: boolean;
   isReorderDropTarget?: boolean;
   onReorderDragStart?: (e: DragEvent<HTMLDivElement>) => void;
+  onReorderDrag?: (e: DragEvent<HTMLDivElement>) => void;
   onReorderDragEnd?: (e: DragEvent<HTMLDivElement>) => void;
   onReorderDragOver?: (e: DragEvent<HTMLDivElement>) => void;
   onReorderDragLeave?: (e: DragEvent<HTMLDivElement>) => void;
@@ -366,6 +550,7 @@ function Book3D({
         ref={bookRef}
         draggable={allowReorder}
         onDragStart={allowReorder ? onReorderDragStart : undefined}
+        onDrag={allowReorder ? onReorderDrag : undefined}
         onDragEnd={allowReorder ? onReorderDragEnd : undefined}
         onClick={handleClick}
         onMouseEnter={handleMouseEnter}
@@ -566,60 +751,33 @@ function Book3D({
             />
           )}
 
-          {/* Admin delete × — allowed even when folder is locked */}
-          {isAdmin && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onDelete(file); }}
+          {/* Admin options menu — rename / delete (delete allowed even when folder is locked) */}
+          {isAdmin && !renaming && (
+            <div
+              onClick={(e) => e.stopPropagation()}
               style={{
                 position: "absolute", bottom: 6, right: 6,
-                width: 20, height: 20,
-                borderRadius: "50%",
-                background: "rgba(0,0,0,0.4)",
-                border: "none", color: "#fff",
-                fontSize: 14, fontWeight: "bold",
-                cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center",
                 opacity: hovered ? 1 : 0,
                 transition: "opacity 150ms ease",
-                lineHeight: 1, padding: 0,
                 zIndex: 10,
               }}
-              title="Delete file"
-              aria-label={`Delete ${file.filename}`}
             >
-              ×
-            </button>
-          )}
-
-          {/* Admin rename ✎ */}
-          {isAdmin && allowRename && onRename && !renaming && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setRenameDraft(file.filename);
-                setRenaming(true);
-              }}
-              style={{
-                position: "absolute", bottom: 6, left: 6,
-                width: 20, height: 20,
-                borderRadius: "50%",
-                background: "rgba(0,0,0,0.4)",
-                border: "none", color: "#fff",
-                fontSize: 11,
-                cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                opacity: hovered ? 1 : 0,
-                transition: "opacity 150ms ease",
-                lineHeight: 1, padding: 0,
-                zIndex: 10,
-              }}
-              title="Rename file"
-              aria-label={`Rename ${file.filename}`}
-            >
-              ✎
-            </button>
+              <FileActionsMenu
+                triggerLabel={file.filename}
+                triggerStyle={{
+                  width: 20, height: 20,
+                  borderRadius: "50%",
+                  background: "rgba(0,0,0,0.4)",
+                  color: "#fff",
+                }}
+                onRename={
+                  allowRename && onRename
+                    ? () => { setRenameDraft(file.filename); setRenaming(true); }
+                    : undefined
+                }
+                onDelete={() => onDelete(file)}
+              />
+            </div>
           )}
 
           {/* Inline rename overlay */}
@@ -696,6 +854,7 @@ function ShelfRow({
   draggingFileId,
   dragOverFileId,
   onBookDragStart,
+  onBookDrag,
   onBookDragEnd,
   onBookDragOver,
   onBookDragLeave,
@@ -719,6 +878,7 @@ function ShelfRow({
   draggingFileId: string | null;
   dragOverFileId: string | null;
   onBookDragStart: (fileId: string, e: DragEvent<HTMLDivElement>) => void;
+  onBookDrag: (e: DragEvent<HTMLDivElement>) => void;
   onBookDragEnd: (e: DragEvent<HTMLDivElement>) => void;
   onBookDragOver: (fileId: string, e: DragEvent<HTMLDivElement>) => void;
   onBookDragLeave: (fileId: string, e: DragEvent<HTMLDivElement>) => void;
@@ -759,6 +919,7 @@ function ShelfRow({
               isReorderDragged={allowReorder && draggingFileId === file.id}
               isReorderDropTarget={allowReorder && dragOverFileId === file.id}
               onReorderDragStart={(e) => onBookDragStart(file.id, e)}
+              onReorderDrag={onBookDrag}
               onReorderDragEnd={onBookDragEnd}
               onReorderDragOver={(e) => onBookDragOver(file.id, e)}
               onReorderDragLeave={(e) => onBookDragLeave(file.id, e)}
@@ -1221,44 +1382,28 @@ export function ListView({
                     </button>
                   </>
                 ) : (
-                  <>
-                    {allowRename && onRename && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setRenamingId(file.id);
-                          setRenameDraft(file.filename);
-                        }}
-                        style={{
-                          fontFamily: fontSerif, fontSize: 11, padding: "4px 8px",
-                          background: hoveredId === file.id ? "rgba(0,0,0,0.06)" : "transparent",
-                          border: `1px solid ${C.border}`, borderRadius: 3, color: C.navy, cursor: "pointer",
-                          opacity: hoveredId === file.id ? 1 : 0,
-                          transition: "opacity 150ms ease",
-                        }}
-                        title="Rename file"
-                      >
-                        Rename
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); onDelete(file); }}
-                      style={{
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      opacity: hoveredId === file.id ? 1 : 0,
+                      transition: "opacity 150ms ease",
+                    }}
+                  >
+                    <FileActionsMenu
+                      triggerLabel={file.filename}
+                      triggerStyle={{
                         width: 24, height: 24, borderRadius: "50%",
                         background: hoveredId === file.id ? "rgba(0,0,0,0.08)" : "transparent",
-                        border: "none", color: C.muted,
-                        fontSize: 16, cursor: "pointer",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        transition: "background 150ms ease",
-                        opacity: hoveredId === file.id ? 1 : 0,
+                        color: C.muted,
                       }}
-                      title="Delete file"
-                    >
-                      ×
-                    </button>
-                  </>
+                      onRename={
+                        allowRename && onRename
+                          ? () => { setRenamingId(file.id); setRenameDraft(file.filename); }
+                          : undefined
+                      }
+                      onDelete={() => onDelete(file)}
+                    />
+                  </div>
                 )}
               </div>
             )}
@@ -1313,6 +1458,10 @@ export function BookshelfView({
   const [draggingFileId, setDraggingFileId] = useState<string | null>(null);
   const [dragOverFileId, setDragOverFileId] = useState<string | null>(null);
   const dragSourceRef = useRef<string | null>(null);
+  const fileDragGhostRef = useRef<HTMLDivElement | null>(null);
+  const fileDragPointerOffsetRef = useRef({ x: 0, y: 0 });
+
+  useEffect(() => () => endCardDragPreview(fileDragGhostRef), []);
 
   const reorderActive = allowReorder && !!onReorder;
 
@@ -1322,12 +1471,18 @@ export function BookshelfView({
     setDraggingFileId(fileId);
     e.dataTransfer.setData("text/plain", fileId);
     e.dataTransfer.effectAllowed = "move";
+    beginCardDragPreview(e, e.currentTarget, fileDragGhostRef, fileDragPointerOffsetRef);
   }, [reorderActive]);
+
+  const onBookDrag = useCallback((e: DragEvent<HTMLDivElement>) => {
+    moveCardDragPreview(e, fileDragGhostRef, fileDragPointerOffsetRef);
+  }, []);
 
   const onBookDragEnd = useCallback(() => {
     dragSourceRef.current = null;
     setDraggingFileId(null);
     setDragOverFileId(null);
+    endCardDragPreview(fileDragGhostRef);
   }, []);
 
   const onBookDragOver = useCallback((fileId: string, e: DragEvent<HTMLDivElement>) => {
@@ -1404,6 +1559,7 @@ export function BookshelfView({
               onRename={onRename}
               renamePendingId={renamePendingId}
               onBookDragStart={onBookDragStart}
+              onBookDrag={onBookDrag}
               onBookDragEnd={onBookDragEnd}
               onBookDragOver={onBookDragOver}
               onBookDragLeave={onBookDragLeave}

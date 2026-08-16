@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Fragment, ReactNode, useState, useRef, useEffect, useLayoutEffect, useMemo } from "react";
-import { DragEvent, MutableRefObject } from "react";
+import { DragEvent } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useDebounce } from "use-debounce";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,6 +11,7 @@ import { api } from "@/lib/api";
 import { DocumentChatWidget } from "@/components/document-chat-widget";
 import { useAuth } from "@/lib/hooks/use-auth";
 import { LOCKED_SPINE_COLOR, pickRandomSpineColor } from "@/lib/folder-spine-color";
+import { beginCardDragPreview, endCardDragPreview, moveCardDragPreview } from "@/lib/drag-ghost";
 import { Folder } from "@/lib/types";
 
 /* ── Design tokens (matches BookHomepage.jsx) ── */
@@ -247,7 +248,7 @@ export function FolderBrowser() {
 
   useEffect(() => { setGlobalSearch(urlKeyword); }, [urlKeyword]);
   useEffect(() => { orderedFoldersRef.current = orderedFolders; }, [orderedFolders]);
-  useEffect(() => () => { folderDragGhostRef.current?.remove(); folderDragGhostRef.current = null; }, []);
+  useEffect(() => () => endCardDragPreview(folderDragGhostRef), []);
   useEffect(() => {
     const data = foldersQuery.data;
     if (!data) { setOrderedFolders([]); return; }
@@ -467,17 +468,11 @@ export function FolderBrowser() {
             setDraggedFolderId(folderId);
             event.dataTransfer.effectAllowed = "move";
             event.dataTransfer.setData("text/plain", folderId);
-            beginFolderCardDragPreview(event, cardEl, folderDragGhostRef, folderDragPointerOffsetRef);
+            beginCardDragPreview(event, cardEl, folderDragGhostRef, folderDragPointerOffsetRef);
           }}
-          onDrag={(event) => {
-            const ghost = folderDragGhostRef.current;
-            if (!ghost || (event.clientX === 0 && event.clientY === 0)) return;
-            const { x, y } = folderDragPointerOffsetRef.current;
-            ghost.style.left = `${event.clientX - x}px`;
-            ghost.style.top = `${event.clientY - y}px`;
-          }}
+          onDrag={(event) => moveCardDragPreview(event, folderDragGhostRef, folderDragPointerOffsetRef)}
           onDragEnd={() => {
-            folderDragGhostRef.current?.remove(); folderDragGhostRef.current = null;
+            endCardDragPreview(folderDragGhostRef);
             setDragOverFolderId(null); setDraggedFolderId(null);
           }}
           onDragOver={(folderId, event) => {
@@ -1069,7 +1064,8 @@ function BookSpine({
             marginTop: 8, fontFamily: fontBody, fontSize: 20,
             color: C.muted, background: "none", border: "none",
             cursor: "pointer", padding: "2px 6px", borderRadius: 3,
-            opacity: isHovered ? 1 : 0.4,
+            opacity: isDragged ? 0 : isHovered ? 1 : 0.4,
+            pointerEvents: isDragged ? "none" : undefined,
             transition: "opacity 150ms",
           }}
         >
@@ -1262,37 +1258,6 @@ function trySwapFolderList(folders: Folder[], draggedId: string, targetId: strin
   const next = [...folders];
   [next[i], next[j]] = [next[j]!, next[i]!];
   return next;
-}
-
-function beginFolderCardDragPreview(
-  event: DragEvent<HTMLElement>,
-  cardEl: HTMLElement,
-  ghostRef: MutableRefObject<HTMLDivElement | null>,
-  pointerOffsetRef: MutableRefObject<{ x: number; y: number }>,
-) {
-  ghostRef.current?.remove(); ghostRef.current = null;
-  const rect = cardEl.getBoundingClientRect();
-  pointerOffsetRef.current = {
-    x: Math.max(0, Math.min(event.clientX - rect.left, rect.width)),
-    y: Math.max(0, Math.min(event.clientY - rect.top, rect.height)),
-  };
-  const canvas = document.createElement("canvas");
-  canvas.width = 1; canvas.height = 1;
-  event.dataTransfer.setDragImage(canvas, 0, 0);
-
-  const ghost = cardEl.cloneNode(true) as HTMLDivElement;
-  ghost.removeAttribute("id");
-  ghost.querySelectorAll("[id]").forEach(el => el.removeAttribute("id"));
-  Object.assign(ghost.style, {
-    position: "fixed", boxSizing: "border-box", margin: "0",
-    left: `${event.clientX - pointerOffsetRef.current.x}px`,
-    top: `${event.clientY - pointerOffsetRef.current.y}px`,
-    width: `${rect.width}px`, pointerEvents: "none",
-    zIndex: "2147483647", opacity: "1",
-  });
-  ghost.style.setProperty("box-shadow", "0 28px 55px rgba(15,23,42,0.28),0 0 0 1px rgba(15,23,42,0.08)");
-  document.body.appendChild(ghost);
-  ghostRef.current = ghost;
 }
 
 function highlightKeyword(text: string, keyword: string): ReactNode {
