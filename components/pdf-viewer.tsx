@@ -15,6 +15,20 @@ import type { PDFDocumentProxy } from "pdfjs-dist";
  */
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
+/**
+ * Without these, PDF.js can't decode JPEG2000/JPX-encoded images (common in cover pages
+ * exported from design tools like InDesign/Illustrator) or load its standard/CJK fonts —
+ * it silently drops the failing draw op instead of throwing, so the page still renders but
+ * with any such image (e.g. a cover's background photo) missing while the surrounding text
+ * renders fine. Referenced object must be a stable reference — see react-pdf's `options` note.
+ */
+const PDFJS_DOCUMENT_OPTIONS = {
+  cMapUrl: `//unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
+  cMapPacked: true,
+  standardFontDataUrl: `//unpkg.com/pdfjs-dist@${pdfjs.version}/standard_fonts/`,
+  wasmUrl: `//unpkg.com/pdfjs-dist@${pdfjs.version}/wasm/`,
+};
+
 /** Fullscreen only: zoom as scale factors (100% = 1). +/- steps these; pinch clamps and snaps on release. */
 const FULLSCREEN_ZOOM_SCALES = [1, 1.2, 1.4, 1.6, 1.8, 2, 2.2, 2.4, 2.6, 2.8, 3] as const;
 
@@ -1023,6 +1037,7 @@ export function PDFViewer({
   return (
     <Document
       file={documentFile}
+      options={PDFJS_DOCUMENT_OPTIONS}
       onLoadProgress={({ loaded, total }) => {
         setParsePdfProgress((prev) => ({
           loaded,

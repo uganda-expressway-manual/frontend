@@ -20,6 +20,19 @@ import type { FolderFile } from "@/lib/types";
 // Same worker CDN already used in pdf-viewer.tsx
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
+/**
+ * Without these, PDF.js can't decode JPEG2000/JPX-encoded images (common in cover pages
+ * exported from design tools) or load its standard/CJK fonts — it silently drops the failing
+ * draw op instead of throwing, so a cover's background photo can render as blank while its
+ * text still renders. Same options already used in pdf-viewer.tsx.
+ */
+const PDFJS_DOCUMENT_OPTIONS = {
+  cMapUrl: `//unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
+  cMapPacked: true,
+  standardFontDataUrl: `//unpkg.com/pdfjs-dist@${pdfjs.version}/standard_fonts/`,
+  wasmUrl: `//unpkg.com/pdfjs-dist@${pdfjs.version}/wasm/`,
+};
+
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
 const C = {
@@ -88,7 +101,7 @@ async function renderPdfThumbnail(pdfUrl: string, fileId: string): Promise<strin
     if (cached) return cached;
   } catch { /* sessionStorage unavailable */ }
 
-  const task = pdfjs.getDocument({ url: pdfUrl });
+  const task = pdfjs.getDocument({ url: pdfUrl, ...PDFJS_DOCUMENT_OPTIONS });
   const pdf = await task.promise;
   // Different files can have a differently-sized cover (page 1) than the rest of their
   // pages; a malformed/degenerate MediaBox on that page must not crash the thumbnail —
